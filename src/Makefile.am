@@ -7,6 +7,8 @@ libxayax_la_CXXFLAGS = \
 libxayax_la_LIBADD = \
   $(JSONCPP_LIBS) \
   $(ZMQ_LIBS) $(SQLITE3_LIBS) $(GLOG_LIBS)
-libxayax_la_SOURCES =
+libxayax_la_SOURCES = \
+  database.cpp
 xayax_HEADERS =
-noinst_HEADERS =
+noinst_HEADERS = \
+  private/database.hpp
