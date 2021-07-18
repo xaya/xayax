@@ -10,13 +10,15 @@ libxayax_la_LIBADD = \
 libxayax_la_SOURCES = \
   basechain.cpp \
   database.cpp \
-  chainstate.cpp
+  chainstate.cpp \
+  sync.cpp
 xayax_HEADERS = \
   basechain.hpp \
   blockdata.hpp
 noinst_HEADERS = \
   private/database.hpp \
-  private/chainstate.hpp
+  private/chainstate.hpp \
+  private/sync.hpp
 
 check_PROGRAMS = tests
 TESTS = tests
@@ -32,4 +34,5 @@ tests_LDADD = $(builddir)/libxayax.la \
 check_HEADERS = testutils.hpp
 tests_SOURCES = testutils.cpp \
   chainstate_tests.cpp \
+  sync_tests.cpp \
   testutils_tests.cpp
