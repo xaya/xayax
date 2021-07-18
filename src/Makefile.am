@@ -8,9 +8,11 @@ libxayax_la_LIBADD = \
   $(JSONCPP_LIBS) \
   $(ZMQ_LIBS) $(SQLITE3_LIBS) $(GLOG_LIBS)
 libxayax_la_SOURCES = \
+  basechain.cpp \
   database.cpp \
   chainstate.cpp
 xayax_HEADERS = \
+  basechain.hpp \
   blockdata.hpp
 noinst_HEADERS = \
   private/database.hpp \
@@ -29,4 +31,5 @@ tests_LDADD = $(builddir)/libxayax.la \
   $(GTEST_LIBS)
 check_HEADERS = testutils.hpp
 tests_SOURCES = testutils.cpp \
-  chainstate_tests.cpp
+  chainstate_tests.cpp \
+  testutils_tests.cpp
