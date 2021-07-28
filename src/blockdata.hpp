@@ -20,6 +20,13 @@ namespace xayax
 struct MoveData
 {
 
+  /**
+   * This move's transaction ID.  This is something that must be present
+   * as such for every move and every base chain, as it is used by libxayagame
+   * itself in the pending logic.
+   */
+  std::string txid;
+
   /** The namespace of the name being updated.  */
   std::string ns;
 
@@ -30,7 +37,7 @@ struct MoveData
   std::string mv;
 
   /**
-   * Other metadata (e.g. txid, transferred coins) that is just stored
+   * Other metadata (e.g. transferred coins) that is just stored
    * and forwarded to GSPs.
    */
   Json::Value metadata;
@@ -44,7 +51,7 @@ struct MoveData
 
   friend bool operator== (const MoveData& a, const MoveData& b)
   {
-    return a.ns == b.ns && a.name == b.name && a.mv == b.mv
+    return a.txid == b.txid && a.ns == b.ns && a.name == b.name && a.mv == b.mv
             && a.metadata == b.metadata;
   }
 
