@@ -10,11 +10,13 @@
 #include "private/chainstate.hpp"
 
 #include <json/json.h>
+#include <zmq.hpp>
 
 #include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <thread>
 
@@ -109,6 +111,63 @@ public:
   void Start () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
+
+};
+
+/**
+ * ZMQ subscriber that can be connected to a ZmqPub instance for testing
+ * the notifications we receive.  It automatically verifies that sequence
+ * numbers are correct.
+ */
+class TestZmqSubscriber
+{
+
+private:
+
+  zmq::context_t ctx;
+  zmq::socket_t sock;
+
+  /** Mutex for this instance.  */
+  std::mutex mut;
+
+  /** Condition variable notified when new messages are received.  */
+  std::condition_variable cv;
+
+  /** Expected next sequence number for each command.  */
+  std::map<std::string, unsigned> nextSeq;
+
+  /** For each command, the queue of not-yet-expected messages.  */
+  std::map<std::string, std::queue<Json::Value>> messages;
+
+  /** Background thread that polls the ZMQ socket and notifies waiters.  */
+  std::unique_ptr<std::thread> receiver;
+
+  /** Set to true when the receiver thread should stop.  */
+  bool shouldStop;
+
+  /**
+   * Worker method that is run on the receiver thread.
+   */
+  void ReceiveLoop ();
+
+public:
+
+  /**
+   * Constructs the subscriber and connects it to a socket at the given address.
+   */
+  explicit TestZmqSubscriber (const std::string& addr);
+
+  /**
+   * Cleans up everything, expecting that no unexpected messages have been
+   * received in the mean time.
+   */
+  ~TestZmqSubscriber ();
+
+  /**
+   * Expects num messages to be received with the given topic (waiting until
+   * we get them), and returns all associated JSON data.
+   */
+  std::vector<Json::Value> AwaitMessages (const std::string& cmd, size_t num);
 
 };
 

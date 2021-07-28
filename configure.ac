@@ -33,8 +33,9 @@ AX_PKG_CHECK_MODULES([JSONRPCCLIENT], [libjsonrpccpp-client], [])
 AX_PKG_CHECK_MODULES([JSONRPCSERVER], [libjsonrpccpp-server], [])
 
 # Private dependencies of the library itself.
-AX_PKG_CHECK_MODULES([GLOG], [libglog])
-AX_PKG_CHECK_MODULES([SQLITE3], [sqlite3], [])
+AX_PKG_CHECK_MODULES([GLOG], [], [libglog])
+AX_PKG_CHECK_MODULES([SQLITE3], [], [sqlite3])
+AX_PKG_CHECK_MODULES([UNIVALUE], [], [libunivalue])
 # We use the recv variant taking message_t& over deprecated older functions,
 # which requires at least version 4.3.1.
 AX_PKG_CHECK_MODULES([ZMQ], [], [libzmq >= 4.3.1])

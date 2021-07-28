@@ -5,6 +5,7 @@
 #include "testutils.hpp"
 
 #include <glog/logging.h>
+#include <gtest/gtest.h>
 
 #include <chrono>
 #include <sstream>
@@ -159,6 +160,101 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
         break;
 
       res.push_back (blocks.at (hash));
+    }
+
+  return res;
+}
+
+/* ************************************************************************** */
+
+TestZmqSubscriber::TestZmqSubscriber (const std::string& addr)
+  : sock(ctx, ZMQ_SUB)
+{
+  std::lock_guard<std::mutex> lock(mut);
+
+  sock.connect (addr);
+  sock.set (zmq::sockopt::subscribe, "");
+
+  shouldStop = false;
+  receiver = std::make_unique<std::thread> ([this] ()
+    {
+      ReceiveLoop ();
+    });
+}
+
+TestZmqSubscriber::~TestZmqSubscriber ()
+{
+  std::unique_lock<std::mutex> lock(mut);
+
+  shouldStop = true;
+  lock.unlock ();
+  receiver->join ();
+  lock.lock ();
+
+  receiver.reset ();
+  sock.close ();
+
+  for (const auto& m : messages)
+    EXPECT_TRUE (m.second.empty ())
+        << "Unexpected messages for " << m.first << " received";
+}
+
+void
+TestZmqSubscriber::ReceiveLoop ()
+{
+  std::unique_lock<std::mutex> lock(mut);
+  while (!shouldStop)
+    {
+      zmq::message_t msg;
+      if (!sock.recv (msg, zmq::recv_flags::dontwait))
+        {
+          /* No messages available.  Just sleep a bit and try again.  */
+          lock.unlock ();
+          std::this_thread::sleep_for (std::chrono::milliseconds (1));
+          lock.lock ();
+          continue;
+        }
+
+      const std::string topic = msg.to_string ();
+      ASSERT_EQ (sock.get (zmq::sockopt::rcvmore), 1);
+
+      /* Messages are delivered atomically, so the other parts must be here.  */
+      ASSERT_TRUE (sock.recv (msg, zmq::recv_flags::dontwait));
+      const std::string data = msg.to_string ();
+      ASSERT_EQ (sock.get (zmq::sockopt::rcvmore), 1);
+
+      ASSERT_TRUE (sock.recv (msg, zmq::recv_flags::dontwait));
+      const uint8_t* seqBytes = static_cast<const uint8_t*> (msg.data ());
+      uint32_t seq = 0;
+      ASSERT_EQ (msg.size (), sizeof (seq)) << "Invalid sized sequence number";
+      ASSERT_EQ (sock.get (zmq::sockopt::rcvmore), 0);
+      for (unsigned i = 0; i < sizeof (seq); ++i)
+        seq |= seqBytes[i] << (8 * i);
+
+      /* Check that the sequence number matches.  */
+      ASSERT_EQ (seq, nextSeq[topic]);
+      ++nextSeq[topic];
+
+      /* Parse and enqueue the message.  */
+      messages[topic].push (ParseJson (data));
+      cv.notify_all ();
+    }
+}
+
+std::vector<Json::Value>
+TestZmqSubscriber::AwaitMessages (const std::string& cmd, const size_t num)
+{
+  std::unique_lock<std::mutex> lock(mut);
+
+  std::vector<Json::Value> res;
+  while (res.size () < num)
+    {
+      while (messages[cmd].empty ())
+        cv.wait (lock);
+
+      auto& received = messages[cmd];
+      res.push_back (std::move (received.front ()));
+      received.pop ();
     }
 
   return res;
