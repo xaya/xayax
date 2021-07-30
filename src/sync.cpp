@@ -87,6 +87,7 @@ Sync::NewBaseChainTip ()
 void
 Sync::SetCallbacks (Callbacks* c)
 {
+  std::lock_guard<std::mutex> lock(mut);
   cb = c;
 }
 
@@ -133,9 +134,10 @@ Sync::UpdateStep ()
           if (!RetrieveGenesis (blocks))
             return false;
 
+          Callbacks* cbCopy = cb;
           lock.unlock ();
-          if (cb != nullptr)
-            cb->TipUpdatedFrom ("", blocks);
+          if (cbCopy != nullptr)
+            cbCopy->TipUpdatedFrom ("", blocks);
 
           return true;
         }
@@ -178,13 +180,14 @@ Sync::UpdateStep ()
       CHECK_EQ (prev, blocks[i - 1].hash);
     }
 
-  lock.unlock ();
-
   /* Only notify about a new tip if we actually have a new tip.  This makes
      sure we are not notifying for the case that only the current tip was
      returned in our query.  */
-  if (cb != nullptr && oldTip != blocks.back ().hash)
-    cb->TipUpdatedFrom (oldTip, blocks);
+  Callbacks* cbCopy = cb;
+  lock.unlock ();
+  if (cbCopy != nullptr && oldTip != blocks.back ().hash)
+    cbCopy->TipUpdatedFrom (oldTip, blocks);
+  lock.lock ();
 
   /* If we received fewer blocks than requested, we are caught up.  */
   if (blocks.size () < num)

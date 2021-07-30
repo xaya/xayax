@@ -10,12 +10,14 @@ namespace xayax
 void
 BaseChain::SetCallbacks (Callbacks* c)
 {
+  std::lock_guard<std::mutex> lock(mut);
   cb = c;
 }
 
 void
 BaseChain::TipChanged ()
 {
+  std::lock_guard<std::mutex> lock(mut);
   if (cb != nullptr)
     cb->TipChanged ();
 }

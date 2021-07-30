@@ -8,6 +8,7 @@
 #include "blockdata.hpp"
 
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace xayax
@@ -25,6 +26,9 @@ public:
   class Callbacks;
 
 private:
+
+  /** Lock for this instance (mainly the callback pointer).  */
+  std::mutex mut;
 
   /** The currently active callbacks (or none).  */
   Callbacks* cb = nullptr;
