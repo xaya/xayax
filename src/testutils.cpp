@@ -126,6 +126,23 @@ TestBaseChain::SetTip (const BlockData& blk)
   return blk;
 }
 
+std::vector<BlockData>
+TestBaseChain::AttachBranch (const std::string& parent, const unsigned n)
+{
+  std::vector<BlockData> res;
+  for (unsigned i = 0; i < n; ++i)
+    {
+      BlockData blk;
+      if (i == 0)
+        blk = NewBlock (parent);
+      else
+        blk = NewBlock ();
+      SetTip (blk);
+      res.push_back (std::move (blk));
+    }
+  return res;
+}
+
 void
 TestBaseChain::Start ()
 {
@@ -141,8 +158,14 @@ TestBaseChain::Start ()
           cvNewTip.wait (lock);
           /* Avoid a spurious callback when the thread is woken up not
              because of a notification but because we are shutting down.  */
-          if (!shouldStop)
-            TipChanged ();
+          if (shouldStop)
+            continue;
+
+          /* TipChanged may call back into GetBlockRange (through Sync),
+             so make sure that won't deadlock.  */
+          lock.unlock ();
+          TipChanged ();
+          lock.lock ();
         }
     });
 }
@@ -174,6 +197,7 @@ TestZmqSubscriber::TestZmqSubscriber (const std::string& addr)
 
   sock.connect (addr);
   sock.set (zmq::sockopt::subscribe, "");
+  LOG (INFO) << "Connected ZMQ subscriber to " << addr;
 
   shouldStop = false;
   receiver = std::make_unique<std::thread> ([this] ()
@@ -216,6 +240,7 @@ TestZmqSubscriber::ReceiveLoop ()
         }
 
       const std::string topic = msg.to_string ();
+      VLOG (1) << "Received notification: " << topic;
       ASSERT_EQ (sock.get (zmq::sockopt::rcvmore), 1);
 
       /* Messages are delivered atomically, so the other parts must be here.  */

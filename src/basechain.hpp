@@ -16,7 +16,8 @@ namespace xayax
 
 /**
  * Interface that the "base chain" connector needs to implement to provide
- * Xaya X with the raw data on the connected blockchain.
+ * Xaya X with the raw data on the connected blockchain.  The implemented
+ * methods by subclasses may be called in parallel and should be thread-safe.
  */
 class BaseChain
 {

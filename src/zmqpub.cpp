@@ -355,12 +355,14 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
 void
 ZmqPub::SendBlockAttach (const BlockData& blk, const std::string& reqtoken)
 {
+  VLOG (1) << "Block attach: " << blk.hash;
   SendBlock (PREFIX_ATTACH, blk, reqtoken);
 }
 
 void
 ZmqPub::SendBlockDetach (const BlockData& blk, const std::string& reqtoken)
 {
+  VLOG (1) << "Block detach: " << blk.hash;
   SendBlock (PREFIX_DETACH, blk, reqtoken);
 }
 

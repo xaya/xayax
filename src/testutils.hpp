@@ -108,6 +108,12 @@ public:
    */
   BlockData SetTip (const BlockData& blk);
 
+  /**
+   * Attaches n blocks starting from the given hash.  Returns the
+   * attached blocks.
+   */
+  std::vector<BlockData> AttachBranch (const std::string& parent, unsigned n);
+
   void Start () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;

@@ -155,7 +155,9 @@ protected:
 
   SyncTests ()
     : chain(":memory:"), cb(chain, mutChain)
-  {}
+  {
+    base.Start ();
+  }
 
   /**
    * Starts our sync task, using the given block as genesis.
@@ -227,10 +229,9 @@ TEST_F (SyncTests, BasicSyncing)
     }
 
   StopSync ();
-  for (unsigned i = 0; i < 10; ++i)
-    blk = base.SetTip (base.NewBlock ());
+  const auto branch = base.AttachBranch (blk.hash, 10);
   StartSync (genesis);
-  cb.WaitForTip (blk.hash);
+  cb.WaitForTip (branch.back ().hash);
 
   const auto end = Clock::now ();
   EXPECT_LT (end - start, std::chrono::seconds (1)) << "Sync should not block";
@@ -260,22 +261,18 @@ TEST_F (SyncTests, LongReorg)
   /* With doubling of the blocks to look back, this length of the reorg
      will lead to a start height below zero at one point.  Thus we test and
      make sure this also works properly.  */
-  BlockData blk;
-  for (unsigned i = 0; i < 13; ++i)
-    blk = base.SetTip (base.NewBlock ());
+  const auto shortBranch = base.AttachBranch (forkPoint.hash, 13);
 
   sync->NewBaseChainTip ();
-  cb.WaitForTip (blk.hash);
+  cb.WaitForTip (shortBranch.back ().hash);
 
   StopSync ();
 
-  blk = base.SetTip (base.NewBlock (forkPoint.hash));
-  for (unsigned i = 0; i < 20; ++i)
-    blk = base.SetTip (base.NewBlock ());
+  const auto longBranch = base.AttachBranch (forkPoint.hash, 20);
 
   LOG (INFO) << "Restarting sync, doing reorg...";
   StartSync (genesis);
-  cb.WaitForTip (blk.hash);
+  cb.WaitForTip (longBranch.back ().hash);
 }
 
 TEST_F (SyncTests, ShortReorg)
@@ -285,13 +282,10 @@ TEST_F (SyncTests, ShortReorg)
      if the new tip has a lower block height than the old (local) tip.  */
 
   const auto genesis = base.SetGenesis (base.NewGenesis (0));
-
-  BlockData blk;
-  for (unsigned i = 0; i < 10; ++i)
-    blk = base.SetTip (base.NewBlock ());
+  const auto longBranch = base.AttachBranch (genesis.hash, 10);
 
   StartSync (genesis);
-  cb.WaitForTip (blk.hash);
+  cb.WaitForTip (longBranch.back ().hash);
 
   const auto reorg = base.SetTip (base.NewBlock (genesis.hash));
   sync->NewBaseChainTip ();
