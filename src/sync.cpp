@@ -97,9 +97,9 @@ Sync::IncreaseNumBlocks ()
 }
 
 bool
-Sync::RetrieveGenesis ()
+Sync::RetrieveGenesis (std::vector<BlockData>& blocks)
 {
-  const auto blocks = base.GetBlockRange (genesisHeight, 1);
+  blocks = base.GetBlockRange (genesisHeight, 1);
   if (blocks.empty ())
     {
       LOG (WARNING)
@@ -109,7 +109,7 @@ Sync::RetrieveGenesis ()
     }
 
   CHECK_EQ (blocks.size (), 1);
-  const auto& blk = blocks[0];
+  const auto& blk = blocks.front ();
   CHECK_EQ (blk.hash, genesisHash) << "Mismatch in genesis hash";
 
   chain.Initialise (blk);
@@ -129,12 +129,13 @@ Sync::UpdateStep ()
       const int64_t tipHeight = chain.GetTipHeight ();
       if (tipHeight == -1)
         {
-          if (!RetrieveGenesis ())
+          std::vector<BlockData> blocks;
+          if (!RetrieveGenesis (blocks))
             return false;
 
           lock.unlock ();
           if (cb != nullptr)
-            cb->TipUpdatedFrom ("");
+            cb->TipUpdatedFrom ("", blocks);
 
           return true;
         }
@@ -183,7 +184,7 @@ Sync::UpdateStep ()
      sure we are not notifying for the case that only the current tip was
      returned in our query.  */
   if (cb != nullptr && oldTip != blocks.back ().hash)
-    cb->TipUpdatedFrom (oldTip);
+    cb->TipUpdatedFrom (oldTip, blocks);
 
   /* If we received fewer blocks than requested, we are caught up.  */
   if (blocks.size () < num)

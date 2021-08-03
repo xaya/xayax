@@ -98,13 +98,38 @@ public:
   }
 
   void
-  TipUpdatedFrom (const std::string& oldTip) override
+  TipUpdatedFrom (const std::string& oldTip,
+                  const std::vector<BlockData>& attaches) override
   {
     std::lock_guard<std::mutex> lock(mutChain);
+
     CHECK_EQ (oldTip, currentTip);
     currentTip = GetCurrentTip (chain);
-    cv.notify_all ();
+
+    /* Verify that the block attaches make sense with respect to the
+       new chain state.  They should all be on the main chain, ending
+       in the current tip, and going back at least to the fork point
+       for the branch to the old tip.  */
+    CHECK (!attaches.empty ());
+    CHECK_EQ (attaches.back ().hash, currentTip);
+    for (unsigned i = 1; i < attaches.size (); ++i)
+      CHECK_EQ (attaches[i].parent, attaches[i - 1].hash);
+
+    if (!oldTip.empty ())
+      {
+        std::vector<BlockData> detaches;
+        CHECK (chain.GetForkBranch (oldTip, detaches));
+        const std::string forkParent
+            = (detaches.empty () ? oldTip : detaches.back ().parent);
+        bool foundForkPoint = false;
+        for (const auto& blk : attaches)
+          if (blk.parent == forkParent)
+            foundForkPoint = true;
+        CHECK (foundForkPoint);
+      }
+
     ++updates;
+    cv.notify_all ();
   }
 
 };

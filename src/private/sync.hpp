@@ -13,6 +13,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace xayax
 {
@@ -98,9 +99,10 @@ private:
   /**
    * Tries to retrieve the genesis block from the base chain and set
    * it in our chainstate.  Returns true on success and false if we failed
-   * to get the block.
+   * to get the block.  The genesis block (if any) will be stored in the
+   * vector of blocks.
    */
-  bool RetrieveGenesis ();
+  bool RetrieveGenesis (std::vector<BlockData>& blocks);
 
   /**
    * Runs a single update step.  This checks the state of our chain vs
@@ -151,8 +153,16 @@ public:
    * Invoked when the current tip of the chainstate managed by a Sync instance
    * is updated.  The old tip is passed in as well.  When the genesis block is
    * first set, oldTip will be passed as "".
+   *
+   * The sequence of last blocks attached (which may go back before the
+   * actual fork point, but whose last block will be the new tip) is passed
+   * as well, as it can be useful e.g. for sending ZMQ notifications.
+   * This also ensures that the update from old tip to new tip can atomically
+   * be processed by the callee, without any risk of a race condition when
+   * it queries for the current tip again on the base chain.
    */
-  virtual void TipUpdatedFrom (const std::string& oldTip) = 0;
+  virtual void TipUpdatedFrom (const std::string& oldTip,
+                               const std::vector<BlockData>& attaches) = 0;
 
 };
 
