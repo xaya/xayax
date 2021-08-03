@@ -64,6 +64,12 @@ private:
   /** Condition variable that gets notified if the tip is updated.  */
   std::condition_variable cv;
 
+  /**
+   * Counter for tip-updated calls, so we can make sure there are not any
+   * unexpected / spurious ones.
+   */
+  unsigned updates = 0;
+
 public:
 
   explicit TestCallbacks (Chainstate& c, std::mutex& mC)
@@ -81,6 +87,16 @@ public:
       cv.wait (lock);
   }
 
+  /**
+   * Returns the number of tip update calls we have received so far.
+   */
+  unsigned
+  GetNumUpdateCalls () const
+  {
+    std::lock_guard<std::mutex> lock(mutChain);
+    return updates;
+  }
+
   void
   TipUpdatedFrom (const std::string& oldTip) override
   {
@@ -88,6 +104,7 @@ public:
     CHECK_EQ (oldTip, currentTip);
     currentTip = GetCurrentTip (chain);
     cv.notify_all ();
+    ++updates;
   }
 
 };
@@ -149,7 +166,7 @@ TEST_F (SyncTests, WaitingForGenesis)
   StartSync (blk);
 
   base.SetGenesis (base.NewGenesis (1));
-  
+
   SleepSome ();
 
   blk = base.NewBlock ();
@@ -219,7 +236,7 @@ TEST_F (SyncTests, LongReorg)
      will lead to a start height below zero at one point.  Thus we test and
      make sure this also works properly.  */
   BlockData blk;
-  for (unsigned i = 0; i < 6; ++i)
+  for (unsigned i = 0; i < 13; ++i)
     blk = base.SetTip (base.NewBlock ());
 
   sync->NewBaseChainTip ();
@@ -234,6 +251,42 @@ TEST_F (SyncTests, LongReorg)
   LOG (INFO) << "Restarting sync, doing reorg...";
   StartSync (genesis);
   cb.WaitForTip (blk.hash);
+}
+
+TEST_F (SyncTests, ShortReorg)
+{
+  /* Even though that is not what happens in practice typically, the
+     syncing process should detect if the the chain tip changes also
+     if the new tip has a lower block height than the old (local) tip.  */
+
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+
+  BlockData blk;
+  for (unsigned i = 0; i < 10; ++i)
+    blk = base.SetTip (base.NewBlock ());
+
+  StartSync (genesis);
+  cb.WaitForTip (blk.hash);
+
+  const auto reorg = base.SetTip (base.NewBlock (genesis.hash));
+  sync->NewBaseChainTip ();
+  cb.WaitForTip (reorg.hash);
+}
+
+TEST_F (SyncTests, NoSuperfluousUpdateCalls)
+{
+  /* Make sure that the update callback is not invoked if the tip
+     does not actually change.  */
+
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+  const auto tip = base.SetTip (base.NewBlock ());
+  StartSync (genesis);
+  cb.WaitForTip (tip.hash);
+
+  const unsigned calls = cb.GetNumUpdateCalls ();
+  sync->NewBaseChainTip ();
+  SleepSome ();
+  EXPECT_EQ (cb.GetNumUpdateCalls (), calls);
 }
 
 /* ************************************************************************** */

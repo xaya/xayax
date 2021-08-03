@@ -57,7 +57,7 @@ Sync::Start ()
   CHECK (updater == nullptr);
 
   shouldStop = false;
-  numBlocks = 2;
+  numBlocks = 1;
   nextStartHeight = -1;
 
   updater = std::make_unique<std::thread> ([this] ()
@@ -138,28 +138,30 @@ Sync::UpdateStep ()
 
           return true;
         }
-      startHeight = tipHeight + 1;
+      startHeight = tipHeight;
     }
 
+  /* We query for at least three blocks, starting from the current tip.
+     This means that normally, the current tip will be returned as first
+     block; but if it is not, we can detect that something changed, even
+     if the new tip has a lower height.  If a new block has been
+     attached (common case), we will receive two blocks, and can then also
+     detect immediately that no more blocks are there.  If we get three
+     blocks, we will continue querying for more after attaching them.  */
+  const unsigned num = std::max<unsigned> (numBlocks, 3);
   CHECK_GE (startHeight, 0);
   VLOG (1)
-      << "Requesting " << numBlocks << " blocks from " << startHeight
+      << "Requesting " << num << " blocks from " << startHeight
       << " from the base chain";
+  const auto blocks = base.GetBlockRange (startHeight, num);
 
-  const auto blocks = base.GetBlockRange (startHeight, numBlocks);
-
-  if (blocks.empty ())
-    return false;
-
-  const auto& firstBlock = blocks[0];
   std::string oldTip;
-  if (!chain.SetTip (firstBlock, oldTip))
+  if (blocks.empty () || !chain.SetTip (blocks.front (), oldTip))
     {
       /* The first block does not fit to our existing chain.  We need to
          go back and request blocks prior until we find the fork point.  */
       IncreaseNumBlocks ();
-      nextStartHeight = std::max<int64_t> (genesisHeight,
-                                           startHeight - numBlocks);
+      nextStartHeight = std::max<int64_t> (genesisHeight, startHeight - num);
       return true;
     }
 
@@ -176,13 +178,17 @@ Sync::UpdateStep ()
     }
 
   lock.unlock ();
-  if (cb != nullptr)
+
+  /* Only notify about a new tip if we actually have a new tip.  This makes
+     sure we are not notifying for the case that only the current tip was
+     returned in our query.  */
+  if (cb != nullptr && oldTip != blocks.back ().hash)
     cb->TipUpdatedFrom (oldTip);
 
   /* If we received fewer blocks than requested, we are caught up.  */
-  if (blocks.size () < numBlocks)
+  if (blocks.size () < num)
     {
-      numBlocks = 2;
+      numBlocks = 1;
       return false;
     }
 
