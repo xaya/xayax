@@ -77,7 +77,7 @@ struct BlockData
   std::string parent;
 
   /** The block's height relative to the blockchain genesis.  */
-  uint64_t height;
+  uint64_t height = 0;
 
   /**
    * Other metadata (e.g. timestamps, RNG seed) that is just stored and
