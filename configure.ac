@@ -29,10 +29,10 @@ CXXFLAGS="${CXXFLAGS} -DGLOG_NO_ABBREVIATED_SEVERITIES"
 # Public dependencies (exposed in the headers of xayax to
 # users of the library).
 AX_PKG_CHECK_MODULES([JSONCPP], [jsoncpp], [])
-AX_PKG_CHECK_MODULES([JSONRPCCLIENT], [libjsonrpccpp-client], [])
-AX_PKG_CHECK_MODULES([JSONRPCSERVER], [libjsonrpccpp-server], [])
 
 # Private dependencies of the library itself.
+AX_PKG_CHECK_MODULES([JSONRPCCLIENT], [], [libjsonrpccpp-client])
+AX_PKG_CHECK_MODULES([JSONRPCSERVER], [], [libjsonrpccpp-server])
 AX_PKG_CHECK_MODULES([GLOG], [], [libglog])
 AX_PKG_CHECK_MODULES([SQLITE3], [], [sqlite3])
 AX_PKG_CHECK_MODULES([UNIVALUE], [], [libunivalue])

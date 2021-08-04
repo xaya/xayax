@@ -1,11 +1,19 @@
 lib_LTLIBRARIES = libxayax.la
 xayaxdir = $(includedir)/xayax
 
+EXTRA_DIST = rpc-stubs/xaya.json
+
+RPC_STUBS = \
+  rpc-stubs/xayarpcclient.h \
+  rpc-stubs/xayarpcserverstub.h
+BUILT_SOURCES = $(RPC_STUBS)
+CLEANFILES = $(RPC_STUBS)
+
 libxayax_la_CXXFLAGS = \
-  $(JSONCPP_CFLAGS) \
+  $(JSONCPP_CFLAGS) $(JSONRPCSERVER_CFLAGS) \
   $(ZMQ_CFLAGS) $(SQLITE3_CFLAGS) $(UNIVALUE_CFLAGS) $(GLOG_CFLAGS)
 libxayax_la_LIBADD = \
-  $(JSONCPP_LIBS) \
+  $(JSONCPP_LIBS) $(JSONRPCSERVER_LIBS) \
   $(ZMQ_LIBS) $(SQLITE3_LIBS) $(UNIVALUE_LIBS) $(GLOG_LIBS) \
   -lstdc++fs
 libxayax_la_SOURCES = \
@@ -23,17 +31,18 @@ noinst_HEADERS = \
   private/database.hpp \
   private/chainstate.hpp \
   private/sync.hpp \
-  private/zmqpub.hpp
+  private/zmqpub.hpp \
+  $(RPC_STUBS)
 
 check_PROGRAMS = tests
 TESTS = tests
 
 tests_CXXFLAGS = \
-  $(JSONCPP_CFLAGS) \
+  $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) \
   $(ZMQ_CFLAGS) $(SQLITE3_CFLAGS) $(GLOG_CFLAGS) \
   $(GTEST_CFLAGS)
 tests_LDADD = $(builddir)/libxayax.la \
-  $(JSONCPP_LIBS) \
+  $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) \
   $(ZMQ_LIBS) $(SQLITE3_LIBS) $(GLOG_LIBS) \
   $(GTEST_LIBS) \
   -lstdc++fs
@@ -44,3 +53,8 @@ tests_SOURCES = testutils.cpp \
   sync_tests.cpp \
   testutils_tests.cpp \
   zmqpub_tests.cpp
+
+rpc-stubs/xayarpcclient.h: $(srcdir)/rpc-stubs/xaya.json
+	jsonrpcstub "$<" --cpp-client=XayaRpcClient --cpp-client-file="$@"
+rpc-stubs/xayarpcserverstub.h: $(srcdir)/rpc-stubs/xaya.json
+	jsonrpcstub "$<" --cpp-server=XayaRpcServerStub --cpp-server-file="$@"

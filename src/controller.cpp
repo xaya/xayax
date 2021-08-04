@@ -7,10 +7,19 @@
 #include "private/chainstate.hpp"
 #include "private/sync.hpp"
 #include "private/zmqpub.hpp"
+#include "rpc-stubs/xayarpcserverstub.h"
+
+#include <jsonrpccpp/common/errors.h>
+#include <jsonrpccpp/common/exception.h>
+#include <jsonrpccpp/server.h>
+#include <jsonrpccpp/server/connectors/httpserver.h>
 
 #include <glog/logging.h>
 
 #include <experimental/filesystem>
+
+#include <memory>
+#include <sstream>
 
 namespace xayax
 {
@@ -19,6 +28,9 @@ namespace
 {
 
 namespace fs = std::experimental::filesystem;
+
+/** Maximum number of attaches sent for a game_sendupdates.  */
+constexpr unsigned MAX_BLOCK_ATTACHES = 1'024;
 
 } // anonymous namespace
 
@@ -41,8 +53,14 @@ private:
   std::mutex mutChain;
 
   Chainstate chain;
-  Sync sync;
+  std::unique_ptr<Sync> sync;
   ZmqPub zmq;
+
+  /** HTTP connector for the RPC server.  */
+  jsonrpc::HttpServer http;
+
+  /** The RPC server run.  */
+  std::unique_ptr<RpcServer> rpc;
 
   /* Callbacks from the base chain.  */
   void TipChanged () override;
@@ -70,30 +88,235 @@ private:
                       std::vector<BlockData>& detach,
                       std::vector<BlockData>& queriedAttach);
 
+  friend class RpcServer;
+
 public:
 
   explicit RunData (Controller& p, const std::string& dbFile);
   ~RunData ();
 
+  /**
+   * Disables the active sync task (used for testing).
+   */
+  void
+  DisableSync ()
+  {
+    sync.reset ();
+  }
+
 };
+
+/* ************************************************************************** */
+
+/**
+ * Local RPC server for the Xaya-Core-like RPC interface.
+ */
+class Controller::RpcServer : public XayaRpcServerStub
+{
+
+private:
+
+  RunData& run;
+
+  /** Lock for this instance (mainly the requests counter).  */
+  std::mutex mut;
+
+  /** Counter used to generate request tokens.  */
+  unsigned requests = 0;
+
+public:
+
+  explicit RpcServer (jsonrpc::AbstractServerConnector& conn, RunData& r)
+    : XayaRpcServerStub(conn), run(r)
+  {}
+
+  Json::Value getzmqnotifications () override;
+  void trackedgames (const std::string& cmd, const std::string& game) override;
+
+  Json::Value getnetworkinfo () override;
+  Json::Value getblockchaininfo () override;
+
+  std::string getblockhash (int height) override;
+  Json::Value getblockheader (const std::string& hash);
+
+  Json::Value game_sendupdates (const std::string& from,
+                                const std::string& gameId);
+
+  Json::Value verifymessage (const std::string& addr, const std::string& msg,
+                             const std::string& sgn) override;
+
+  Json::Value getrawmempool () override;
+
+};
+
+Json::Value
+Controller::RpcServer::getzmqnotifications ()
+{
+  std::lock_guard<std::mutex> lock(run.parent.mut);
+
+  Json::Value res(Json::arrayValue);
+  Json::Value cur(Json::objectValue);
+  cur["type"] = "pubgameblocks";
+  cur["address"] = run.parent.zmqAddr;
+  res.append (cur);
+
+  return res;
+}
+
+void
+Controller::RpcServer::trackedgames (const std::string& cmd,
+                                     const std::string& game)
+{
+  if (cmd == "add")
+    run.zmq.TrackGame (game);
+  else if (cmd == "remove")
+    run.zmq.UntrackGame (game);
+}
+
+Json::Value
+Controller::RpcServer::getnetworkinfo ()
+{
+  /* FIXME: Implement "version" field based on BaseChain & cache */
+  return Json::Value ();
+}
+
+Json::Value
+Controller::RpcServer::getblockchaininfo ()
+{
+  Json::Value res(Json::objectValue);
+
+  /* FIXME: Implement "chain" field based on BaseChain & cache */
+
+  std::lock_guard<std::mutex> lockChain(run.mutChain);
+  const auto tipHeight = run.chain.GetTipHeight ();
+  if (tipHeight == -1)
+    {
+      res["blocks"] = -1;
+      res["bestblockhash"] = "";
+    }
+  else
+    {
+      CHECK_GE (tipHeight, 0);
+      res["blocks"] = static_cast<Json::Int64> (tipHeight);
+
+      std::string tipHash;
+      CHECK (run.chain.GetHashForHeight (tipHeight, tipHash));
+      res["bestblockhash"] = tipHash;
+    }
+
+  return res;
+}
+
+std::string
+Controller::RpcServer::getblockhash (const int height)
+{
+  std::lock_guard<std::mutex> lock(run.mutChain);
+
+  std::string hash;
+  if (!run.chain.GetHashForHeight (height, hash))
+    throw jsonrpc::JsonRpcException (-8, "block height out of range");
+
+  return hash;
+}
+
+Json::Value
+Controller::RpcServer::getblockheader (const std::string& hash)
+{
+  std::lock_guard<std::mutex> lock(run.mutChain);
+
+  uint64_t height;
+  if (!run.chain.GetHeightForHash (hash, height))
+    throw jsonrpc::JsonRpcException (-5, "block not found");
+
+  Json::Value res(Json::objectValue);
+  res["hash"] = hash;
+  res["height"] = static_cast<Json::Int64> (height);
+
+  return res;
+}
+
+Json::Value
+Controller::RpcServer::game_sendupdates (const std::string& from,
+                                         const std::string& gameId)
+{
+  /* TODO: Actually use the gameId to filter notifications sent.  For now,
+     we just trigger "default" ones.  This works as GSPs track their games
+     anyway, but it may send too many notifications.  */
+
+  std::ostringstream reqtoken;
+  {
+    std::lock_guard<std::mutex> lock(mut);
+    ++requests;
+    reqtoken << "request_" << requests;
+  }
+
+  std::vector<BlockData> detaches, attaches;
+  run.PushZmqBlocks (from, {}, MAX_BLOCK_ATTACHES, reqtoken.str (),
+                     detaches, attaches);
+
+  std::string toBlock;
+  if (!attaches.empty ())
+    toBlock = attaches.back ().hash;
+  else if (!detaches.empty ())
+    toBlock = detaches.back ().parent;
+  else
+    toBlock = from;
+
+  Json::Value steps(Json::objectValue);
+  steps["detach"] = static_cast<Json::Int64> (detaches.size ());
+  steps["attach"] = static_cast<Json::Int64> (attaches.size ());
+
+  Json::Value res(Json::objectValue);
+  res["reqtoken"] = reqtoken.str ();
+  res["toblock"] = toBlock;
+  res["steps"] = steps;
+
+  return res;
+}
+
+Json::Value
+Controller::RpcServer::verifymessage (const std::string& addr,
+                                      const std::string& msg,
+                                      const std::string& sgn)
+{
+  /* FIXME: Implement based on BaseChain */
+  return Json::Value ();
+}
+
+Json::Value
+Controller::RpcServer::getrawmempool ()
+{
+  /* FIXME: Implement pending tracking */
+  return Json::Value (Json::arrayValue);
+}
+
+/* ************************************************************************** */
 
 Controller::RunData::RunData (Controller& p, const std::string& dbFile)
   : parent(p), chain(dbFile),
-    sync(parent.base, chain, mutChain,
-         parent.genesisHash, parent.genesisHeight),
-    zmq(parent.zmqAddr)
+    zmq(parent.zmqAddr),
+    http(parent.rpcPort)
 {
   CHECK (parent.run == nullptr);
   parent.run = this;
 
+  sync = std::make_unique<Sync> (parent.base, chain, mutChain,
+                                 parent.genesisHash, parent.genesisHeight);
+
   for (const auto& g : parent.trackedGames)
     zmq.TrackGame (g);
+
+  if (parent.rpcListenLocally)
+    http.BindLocalhost ();
+
+  rpc = std::make_unique<RpcServer> (http, *this);
+  rpc->StartListening ();
 
   parent.ServersStarted ();
 
   parent.base.SetCallbacks (this);
-  sync.SetCallbacks (this);
-  sync.Start ();
+  sync->SetCallbacks (this);
+  sync->Start ();
 }
 
 Controller::RunData::~RunData ()
@@ -101,14 +324,18 @@ Controller::RunData::~RunData ()
   CHECK (parent.run == this);
   parent.run = nullptr;
 
+  rpc->StopListening ();
+
   parent.base.SetCallbacks (nullptr);
-  sync.SetCallbacks (nullptr);
+  if (sync != nullptr)
+    sync->SetCallbacks (nullptr);
 }
 
 void
 Controller::RunData::TipChanged ()
 {
-  sync.NewBaseChainTip ();
+  if (sync != nullptr)
+    sync->NewBaseChainTip ();
 }
 
 void
@@ -328,6 +555,14 @@ Controller::TrackGame (const std::string& gameId)
   std::lock_guard<std::mutex> lock(mut);
   CHECK (run == nullptr) << "Instance is already running";
   trackedGames.insert (gameId);
+}
+
+void
+Controller::DisableSyncForTesting ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  CHECK (run != nullptr) << "Instance is not running";
+  run->DisableSync ();
 }
 
 void

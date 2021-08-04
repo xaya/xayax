@@ -4,13 +4,20 @@
 
 #include "controller.hpp"
 
+#include "rpc-stubs/xayarpcclient.h"
 #include "testutils.hpp"
+
+#include <jsonrpccpp/client.h>
+#include <jsonrpccpp/client/connectors/httpclient.h>
+#include <jsonrpccpp/common/exception.h>
 
 #include <glog/logging.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <experimental/filesystem>
+
+#include <sstream>
 
 namespace xayax
 {
@@ -34,7 +41,20 @@ constexpr int RPC_PORT = 49'838;
 /** Our test game ID.  */
 const std::string GAME_ID = "game";
 
+/**
+ * Constructs the RPC endpoint as string.
+ */
+std::string
+GetRpcEndpoint ()
+{
+  std::ostringstream out;
+  out << "http://localhost:" << RPC_PORT;
+  return out.str ();
+}
+
 /* ************************************************************************** */
+
+} // anonymous namespace
 
 /**
  * Test fixture for the controller.  We use a temporary (but on-disk)
@@ -90,6 +110,11 @@ protected:
   }
 
   /**
+   * Disables syncing in the controller.
+   */
+  void DisableSync ();
+
+  /**
    * Stops the controller instance we currently have and destructs it.
    */
   void StopController ();
@@ -107,7 +132,8 @@ protected:
    * for the given blocks.  Only the block hashes are verified.
    */
   void ExpectZmq (const std::vector<BlockData>& detach,
-                  const std::vector<BlockData>& attach);
+                  const std::vector<BlockData>& attach,
+                  const std::string& reqtoken = "");
 
 };
 
@@ -169,6 +195,12 @@ public:
 };
 
 void
+ControllerTests::DisableSync ()
+{
+  controller->DisableSyncForTesting ();
+}
+
+void
 ControllerTests::Restart (const int pruning)
 {
   StopController ();
@@ -199,22 +231,32 @@ ControllerTests::StopController ()
 
 void
 ControllerTests::ExpectZmq (const std::vector<BlockData>& detach,
-                            const std::vector<BlockData>& attach)
+                            const std::vector<BlockData>& attach,
+                            const std::string& reqtoken)
 {
   auto actual
       = controller->sub->AwaitMessages ("game-block-detach json " + GAME_ID,
                                         detach.size ());
   CHECK_EQ (actual.size (), detach.size ());
   for (unsigned i = 0; i < actual.size (); ++i)
-    ASSERT_EQ (actual[i]["block"]["hash"].asString (), detach[i].hash);
+    {
+      ASSERT_EQ (actual[i]["block"]["hash"], detach[i].hash);
+      ASSERT_EQ (actual[i]["reqtoken"].asString (), reqtoken);
+    }
 
   actual
       = controller->sub->AwaitMessages ("game-block-attach json " + GAME_ID,
                                         attach.size ());
   CHECK_EQ (actual.size (), attach.size ());
   for (unsigned i = 0; i < actual.size (); ++i)
-    ASSERT_EQ (actual[i]["block"]["hash"].asString (), attach[i].hash);
+    {
+      ASSERT_EQ (actual[i]["block"]["hash"], attach[i].hash);
+      ASSERT_EQ (actual[i]["reqtoken"].asString (), reqtoken);
+    }
 }
+
+namespace
+{
 
 /* ************************************************************************** */
 
@@ -275,6 +317,203 @@ TEST_F (ControllerTests, PruningZeroDepth)
   const auto a = base.SetTip (base.NewBlock ());
   const auto b = base.SetTip (base.NewBlock ());
   ExpectZmq ({}, {a, b});
+}
+
+/* ************************************************************************** */
+
+class ControllerRpcTests : public ControllerTests
+{
+
+private:
+
+  /** HTTP client connector for the RPC server.  */
+  jsonrpc::HttpClient httpClient;
+
+protected:
+
+  /** RPC client connected to the test controller's server.  */
+  XayaRpcClient rpc;
+
+  ControllerRpcTests ()
+    : httpClient(GetRpcEndpoint ()), rpc(httpClient)
+  {
+    ExpectZmq ({}, {genesis});
+  }
+
+};
+
+TEST_F (ControllerRpcTests, GetZmqNotifications)
+{
+  auto expected = ParseJson (R"([
+    {
+      "type": "pubgameblocks"
+    }
+  ])");
+  expected[0]["address"] = ZMQ_ADDR;
+
+  EXPECT_EQ (rpc.getzmqnotifications (), expected);
+}
+
+TEST_F (ControllerRpcTests, TrackedGames)
+{
+  rpc.trackedgames ("remove", GAME_ID);
+  const auto a = base.SetTip (base.NewBlock ());
+  /* Wait for the notification to be triggered (but it won't send anything
+     as we are not tracking any game).  */
+  SleepSome ();
+
+  rpc.trackedgames ("add", GAME_ID);
+  const auto b = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {b});
+}
+
+TEST_F (ControllerRpcTests, GetBlockchainInfo)
+{
+  const auto a = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {a});
+
+  const auto info = rpc.getblockchaininfo ();
+  EXPECT_EQ (info["blocks"].asInt (), a.height);
+  EXPECT_EQ (info["bestblockhash"], a.hash);
+}
+
+TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
+{
+  const auto a = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {a});
+  const auto b = base.SetTip (base.NewBlock (genesis.hash));
+  ExpectZmq ({a}, {b});
+
+  EXPECT_EQ (rpc.getblockhash (genesis.height), genesis.hash);
+  EXPECT_EQ (rpc.getblockhash (a.height), b.hash);
+  EXPECT_THROW (rpc.getblockhash (genesis.height - 1),
+                jsonrpc::JsonRpcException);
+  EXPECT_THROW (rpc.getblockhash (a.height + 1), jsonrpc::JsonRpcException);
+
+  const auto hdr = rpc.getblockheader (a.hash);
+  EXPECT_EQ (hdr["hash"], a.hash);
+  EXPECT_EQ (hdr["height"].asInt (), a.height);
+  EXPECT_THROW (rpc.getblockheader ("invalid"), jsonrpc::JsonRpcException);
+}
+
+/* ************************************************************************** */
+
+class ControllerSendUpdatesTests : public ControllerRpcTests
+{
+
+protected:
+
+  /* genesis - b - c
+             \ a
+  */
+  BlockData a, b, c;
+
+  ControllerSendUpdatesTests ()
+  {
+    a = base.SetTip (base.NewBlock ());
+    ExpectZmq ({}, {a});
+    b = base.SetTip (base.NewBlock (genesis.hash));
+    c = base.SetTip (base.NewBlock ());
+    ExpectZmq ({a}, {b, c});
+  }
+
+};
+
+TEST_F (ControllerSendUpdatesTests, NoUpdates)
+{
+  const auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], c.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 0
+  })"));
+}
+
+TEST_F (ControllerSendUpdatesTests, AttachOnly)
+{
+  const auto upd = rpc.game_sendupdates (genesis.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], c.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 2,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, {b, c}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, DetachOnly)
+{
+  base.SetTip (genesis);
+  ExpectZmq ({c, b}, {});
+
+  const auto upd = rpc.game_sendupdates (a.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], genesis.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 1
+  })"));
+  ExpectZmq ({a}, {}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, DetachAndAttach)
+{
+  const auto upd = rpc.game_sendupdates (a.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], c.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 2,
+    "detach": 1
+  })"));
+  ExpectZmq ({a}, {b, c}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, FromGenesis)
+{
+  const auto upd = rpc.game_sendupdates ("", GAME_ID);
+  EXPECT_EQ (upd["toblock"], c.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 3,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, {genesis, b, c}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, ChainMismatch)
+{
+  /* We use an extended chain in this test:
+
+      genesis - b - c
+             |  \ - d
+             \  \ - f
+              \ a - e
+  */
+
+  const auto d = base.SetTip (base.NewBlock (b.hash));
+  ExpectZmq ({c}, {d});
+  DisableSync ();
+
+  /* If we reorg back to a, then the fork point according to the local
+     chain state (b) will not match up with the attaches according to
+     the base chain (a).  */
+  base.SetTip (a);
+  const auto e = base.SetTip (base.NewBlock ());
+
+  auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], b.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 1
+  })"));
+  ExpectZmq ({c}, {}, upd["reqtoken"].asString ());
+
+  /* Build a base chain state where the fork point is b, but the newly
+     attached tip is not known in the local chain at all.  */
+  const auto f = base.SetTip (base.NewBlock (b.hash));
+  upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], b.hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 1
+  })"));
+  ExpectZmq ({c}, {}, upd["reqtoken"].asString ());
 }
 
 /* ************************************************************************** */

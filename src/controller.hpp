@@ -25,6 +25,7 @@ class Controller
 
 private:
 
+  class RpcServer;
   class RunData;
 
   /** The underlying base chain being used.  */
@@ -68,6 +69,15 @@ private:
   RunData* run = nullptr;
   /** Set to true when Run should stop.  */
   bool shouldStop;
+
+  /**
+   * Disables the sync task in the running controller.  This can be used
+   * for some tests, where we want the local chain state and the base chain
+   * to deviate.
+   */
+  void DisableSyncForTesting ();
+
+  friend class ControllerTests;
 
 protected:
 

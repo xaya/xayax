@@ -1,0 +1,65 @@
+[
+  {
+    "name": "getzmqnotifications",
+    "params": {},
+    "returns": []
+  },
+  {
+    "name": "trackedgames",
+    "params":
+      {
+        "command": "add",
+        "gameid": "huc"
+      }
+  },
+  {
+    "name": "getnetworkinfo",
+    "params": {},
+    "returns": {}
+  },
+  {
+    "name": "getblockchaininfo",
+    "params": {},
+    "returns": {}
+  },
+  {
+    "name": "getblockhash",
+    "params":
+      {
+        "height": 42
+      },
+    "returns": "hash"
+  },
+  {
+    "name": "getblockheader",
+    "params":
+      {
+        "blockhash": "hash"
+      },
+    "returns": {}
+  },
+  {
+    "name": "game_sendupdates",
+    "params":
+      {
+        "gameid": "huc",
+        "fromblock": "hash"
+      },
+    "returns": {}
+  },
+  {
+    "name": "verifymessage",
+    "params":
+      {
+        "address": "",
+        "signature": "base64",
+        "message": "message"
+      },
+    "returns": {}
+  },
+  {
+    "name": "getrawmempool",
+    "params": {},
+    "returns": []
+  }
+]
