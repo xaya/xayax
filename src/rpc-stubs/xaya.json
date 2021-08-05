@@ -61,5 +61,9 @@
     "name": "getrawmempool",
     "params": {},
     "returns": []
+  },
+  {
+    "name": "stop",
+    "params": {}
   }
 ]

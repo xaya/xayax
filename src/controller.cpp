@@ -151,6 +151,7 @@ public:
                              const std::string& sgn) override;
 
   Json::Value getrawmempool () override;
+  void stop () override;
 
 };
 
@@ -306,6 +307,12 @@ Controller::RpcServer::getrawmempool ()
 {
   /* FIXME: Implement pending tracking */
   return Json::Value (Json::arrayValue);
+}
+
+void
+Controller::RpcServer::stop ()
+{
+  run.parent.Stop ();
 }
 
 /* ************************************************************************** */
@@ -611,6 +618,11 @@ Controller::Run ()
   shouldStop = false;
   while (!shouldStop)
     cv.wait (lock);
+
+  /* Wait a tiny bit of extra time before shutting down.  This gives
+     e.g. the RPC server time to finish the stop() call that was made
+     without erroring on a closed connection.  */
+  std::this_thread::sleep_for (std::chrono::milliseconds (10));
 }
 
 /* ************************************************************************** */
