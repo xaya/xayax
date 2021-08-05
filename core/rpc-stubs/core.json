@@ -1,0 +1,44 @@
+[
+  {
+    "name": "getnetworkinfo",
+    "params": {},
+    "returns": {}
+  },
+  {
+    "name": "getblockchaininfo",
+    "params": {},
+    "returns": {}
+  },
+  {
+    "name": "getblockhash",
+    "params":
+      {
+        "height": 42
+      },
+    "returns": "hash"
+  },
+  {
+    "name": "getblock",
+    "params":
+      {
+        "blockhash": "hash",
+        "verbosity": 2
+      },
+    "returns": {}
+  },
+  {
+    "name": "verifymessage",
+    "params":
+      {
+        "address": "",
+        "signature": "base64",
+        "message": "message"
+      },
+    "returns": {}
+  },
+  {
+    "name": "getrawmempool",
+    "params": {},
+    "returns": []
+  }
+]
