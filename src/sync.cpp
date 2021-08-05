@@ -60,6 +60,11 @@ Sync::Start ()
   numBlocks = 1;
   nextStartHeight = -1;
 
+  {
+    std::lock_guard<std::mutex> lockChain(mutChain);
+    chain.SetChain (base.GetChain ());
+  }
+
   updater = std::make_unique<std::thread> ([this] ()
     {
       std::unique_lock<std::mutex> lock(mut);

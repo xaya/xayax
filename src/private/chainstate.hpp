@@ -56,6 +56,14 @@ public:
   explicit Chainstate (const std::string& file);
 
   /**
+   * If no chain string is recorded yet in the local database,
+   * sets it to the given value.  If one is set, verifies that it
+   * matches the value; aborts if not (as this would mean we are
+   * mixing up inconsistent chains).
+   */
+  void SetChain (const std::string& chain);
+
+  /**
    * Returns the block height of the best chain.  If there is no block
    * set yet (not even a genesis block), returns -1.
    */

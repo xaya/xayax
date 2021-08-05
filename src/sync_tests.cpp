@@ -308,6 +308,28 @@ TEST_F (SyncTests, NoSuperfluousUpdateCalls)
   EXPECT_EQ (cb.GetNumUpdateCalls (), calls);
 }
 
+TEST_F (SyncTests, VerifiesChainString)
+{
+  testing::FLAGS_gtest_death_test_style = "threadsafe";
+
+  base.SetChain ("foo");
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+  StartSync (genesis);
+  cb.WaitForTip (genesis.hash);
+
+  StopSync ();
+  StartSync (genesis);
+  cb.WaitForTip (genesis.hash);
+
+  StopSync ();
+  base.SetChain ("bar");
+  EXPECT_DEATH (
+    {
+      StartSync (genesis);
+      cb.WaitForTip (genesis.hash);
+    }, "Chain mismatch");
+}
+
 /* ************************************************************************** */
 
 } // anonymous namespace

@@ -67,6 +67,12 @@ SetupSchema (Database& db)
     CREATE INDEX IF NOT EXISTS `moves_by_block`
         ON `moves` (`block`, `id`);
 
+    -- Base metadata variables as a general key/value store.
+    CREATE TABLE IF NOT EXISTS `variables` (
+      `name` TEXT NOT NULL PRIMARY KEY,
+      `value` TEXT NOT NULL
+    );
+
   )");
 }
 
@@ -207,6 +213,32 @@ Chainstate::Chainstate (const std::string& file)
   : Database(file)
 {
   SetupSchema (*this);
+}
+
+void
+Chainstate::SetChain (const std::string& chain)
+{
+  auto stmt = PrepareRo (R"(
+    SELECT `value`
+      FROM `variables`
+      WHERE `name` = 'chain'
+  )");
+
+  if (stmt.Step ())
+    {
+      CHECK_EQ (chain, stmt.Get<std::string> (0))
+          << "Chain mismatch between connected base chain and the local state";
+      CHECK (!stmt.Step ());
+      return;
+    }
+
+  stmt = Prepare (R"(
+    INSERT INTO `variables`
+      (`name`, `value`)
+      VALUES ('chain', ?1)
+  )");
+  stmt.Bind (1, chain);
+  stmt.Execute ();
 }
 
 int64_t

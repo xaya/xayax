@@ -147,6 +147,13 @@ protected:
 TEST_F (ChainstateTests, SetupWorks)
 {}
 
+TEST_F (ChainstateTests, SetChain)
+{
+  state.SetChain ("foo");
+  state.SetChain ("foo");
+  EXPECT_DEATH (state.SetChain ("bar"), "Chain mismatch");
+}
+
 TEST_F (ChainstateTests, NoBlocks)
 {
   EXPECT_EQ (state.GetTipHeight (), -1);
