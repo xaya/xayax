@@ -364,26 +364,20 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
   std::vector<BlockData> detach, queriedAttach;
   PushZmqBlocks (oldTip, attaches, 0, "", detach, queriedAttach);
 
-  bool sanityChecks;
-  int pruning;
-  {
-    std::lock_guard<std::mutex> lock(parent.mut);
-    sanityChecks = parent.sanityChecks;
-    pruning = parent.pruning;
-  }
+  /* The pruning and sanityChecks flags in parent are never modified
+     while the process is running, so it is fine to read them here without
+     holding the parent mutex.  */
 
-  std::lock_guard<std::mutex> lock(mutChain);
-
-  if (sanityChecks)
+  if (parent.sanityChecks)
     chain.SanityCheck ();
 
-  if (pruning != -1)
+  if (parent.pruning != -1)
     {
-      CHECK_GE (pruning, 0);
+      CHECK_GE (parent.pruning, 0);
       const auto tipHeight = chain.GetTipHeight ();
       CHECK_GE (tipHeight, parent.genesisHeight);
-      if (tipHeight > pruning)
-        chain.Prune (tipHeight - pruning);
+      if (tipHeight > parent.pruning)
+        chain.Prune (tipHeight - parent.pruning);
     }
 }
 
@@ -555,6 +549,7 @@ void
 Controller::EnableSanityChecks ()
 {
   std::lock_guard<std::mutex> lock(mut);
+  CHECK (run == nullptr) << "Instance is already running";
   sanityChecks = true;
   LOG (WARNING) << "Turning on sanity checks, this is slow";
 }
@@ -563,6 +558,7 @@ void
 Controller::EnablePruning (unsigned depth)
 {
   std::lock_guard<std::mutex> lock(mut);
+  CHECK (run == nullptr) << "Instance is already running";
   LOG (INFO) << "Turned on pruning with depth " << depth;
   pruning = depth;
 }
