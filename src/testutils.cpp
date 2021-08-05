@@ -144,6 +144,20 @@ TestBaseChain::AttachBranch (const std::string& parent, const unsigned n)
 }
 
 void
+TestBaseChain::SetChain (const std::string& str)
+{
+  std::lock_guard<std::mutex> lock(mut);
+  chainString = str;
+}
+
+void
+TestBaseChain::SetVersion (const uint64_t v)
+{
+  std::lock_guard<std::mutex> lock(mut);
+  version = v;
+}
+
+void
 TestBaseChain::Start ()
 {
   std::lock_guard<std::mutex> lock(mut);
@@ -186,6 +200,20 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
     }
 
   return res;
+}
+
+std::string
+TestBaseChain::GetChain ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  return chainString;
+}
+
+uint64_t
+TestBaseChain::GetVersion ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  return version;
 }
 
 /* ************************************************************************** */

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace xayax
@@ -72,6 +73,27 @@ public:
    */
   virtual std::vector<BlockData> GetBlockRange (uint64_t start,
                                                 uint64_t count) = 0;
+
+  /**
+   * Returns a string identifying the underlying chain / network this
+   * corresponds to.  The string should be one of the supported strings
+   * by libxayagame.
+   *
+   * This method is assumed to always return the same value during the
+   * lifetime of the process.
+   */
+  virtual std::string GetChain () = 0;
+
+  /**
+   * Returns an integer indicating the version of the basechain daemon
+   * (and/or the basechain implementation).  This can be used by GSPs to
+   * ensure they are connected to a daemon of a version that is new enough,
+   * e.g. if the format of move or block data was extended with more fields.
+   *
+   * This method is assumed to always return the same value during the
+   * lifetime of the process.
+   */
+  virtual uint64_t GetVersion () = 0;
 
 };
 

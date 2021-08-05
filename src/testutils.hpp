@@ -72,6 +72,11 @@ private:
   /** We use a simple counter to "generate" block hashes.  */
   unsigned hashCounter = 0;
 
+  /** The chain string to return.  */
+  std::string chainString = "test";
+  /** The version number to return.  */
+  uint64_t version = 0;
+
   /**
    * Constructs a new block hash based on our counter.
    */
@@ -114,9 +119,21 @@ public:
    */
   std::vector<BlockData> AttachBranch (const std::string& parent, unsigned n);
 
+  /**
+   * Sets the chain string to return.
+   */
+  void SetChain (const std::string& str);
+
+  /**
+   * Sets the version number to return.
+   */
+  void SetVersion (uint64_t v);
+
   void Start () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
+  std::string GetChain () override;
+  uint64_t GetVersion () override;
 
 };
 

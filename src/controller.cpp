@@ -118,11 +118,16 @@ private:
 
   RunData& run;
 
-  /** Lock for this instance (mainly the requests counter).  */
+  /** Lock for this instance (requests counter and cached version/chain).  */
   std::mutex mut;
 
   /** Counter used to generate request tokens.  */
   unsigned requests = 0;
+
+  /** Cached chain string of the basechain.  */
+  std::string cachedChain;
+  /** Cached version of the basechain.  */
+  int64_t cachedVersion = -1;
 
 public:
 
@@ -176,8 +181,15 @@ Controller::RpcServer::trackedgames (const std::string& cmd,
 Json::Value
 Controller::RpcServer::getnetworkinfo ()
 {
-  /* FIXME: Implement "version" field based on BaseChain & cache */
-  return Json::Value ();
+  Json::Value res(Json::objectValue);
+
+  std::lock_guard<std::mutex> lock(mut);
+  if (cachedVersion == -1)
+    cachedVersion = run.parent.base.GetVersion ();
+  CHECK_GE (cachedVersion, -1);
+  res["version"] = static_cast<Json::Int64> (cachedVersion);
+
+  return res;
 }
 
 Json::Value
@@ -185,7 +197,13 @@ Controller::RpcServer::getblockchaininfo ()
 {
   Json::Value res(Json::objectValue);
 
-  /* FIXME: Implement "chain" field based on BaseChain & cache */
+  {
+    std::lock_guard<std::mutex> lock(mut);
+    if (cachedChain.empty ())
+      cachedChain = run.parent.base.GetChain ();
+    CHECK (!cachedChain.empty ());
+    res["chain"] = cachedChain;
+  }
 
   std::lock_guard<std::mutex> lockChain(run.mutChain);
   const auto tipHeight = run.chain.GetTipHeight ();

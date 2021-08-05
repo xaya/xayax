@@ -367,12 +367,30 @@ TEST_F (ControllerRpcTests, TrackedGames)
   ExpectZmq ({}, {b});
 }
 
+TEST_F (ControllerRpcTests, GetNetworkInfo)
+{
+  /* The first call to getnetworkinfo will cache the version.  */
+  base.SetVersion (42);
+  rpc.getnetworkinfo ();
+  base.SetVersion (100);
+
+  EXPECT_EQ (rpc.getnetworkinfo (), ParseJson (R"({
+    "version": 42
+  })"));
+}
+
 TEST_F (ControllerRpcTests, GetBlockchainInfo)
 {
   const auto a = base.SetTip (base.NewBlock ());
   ExpectZmq ({}, {a});
 
+  /* The first call to getblockchaininfo will cache the chain.  */
+  base.SetChain ("foo");
+  rpc.getblockchaininfo ();
+  base.SetChain ("bar");
+
   const auto info = rpc.getblockchaininfo ();
+  EXPECT_EQ (info["chain"], "foo");
   EXPECT_EQ (info["blocks"].asInt (), a.height);
   EXPECT_EQ (info["bestblockhash"], a.hash);
 }
