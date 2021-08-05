@@ -319,6 +319,28 @@ TEST_F (ControllerTests, PruningZeroDepth)
   ExpectZmq ({}, {a, b});
 }
 
+TEST_F (ControllerTests, PerChainDataDir)
+{
+  ExpectZmq ({}, {genesis});
+  StopController ();
+
+  base.SetChain ("foo");
+  const auto a = base.SetTip (base.NewBlock ());
+  Restart ();
+  ExpectZmq ({}, {genesis, a});
+  StopController ();
+
+  base.SetChain ("bar");
+  const auto b = base.SetTip (base.NewBlock (genesis.hash));
+  Restart ();
+  ExpectZmq ({}, {genesis, b});
+  StopController ();
+
+  base.SetChain ("foo");
+  Restart ();
+  ExpectZmq ({a}, {b});
+}
+
 /* ************************************************************************** */
 
 class ControllerRpcTests : public ControllerTests

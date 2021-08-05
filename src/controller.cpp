@@ -600,7 +600,7 @@ Controller::Run ()
   CHECK (!zmqAddr.empty ()) << "No ZMQ address has been configured";
   CHECK_GT (rpcPort, -1) << "No RPC port has been configured";
 
-  const fs::path pathDataDir(dataDir);
+  const fs::path pathDataDir = fs::path (dataDir) / base.GetChain ();
   if (fs::is_directory (pathDataDir))
     LOG (INFO) << "Using existing data directory: " << pathDataDir;
   else
