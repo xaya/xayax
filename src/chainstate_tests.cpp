@@ -358,6 +358,7 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   ASSERT_TRUE (state.SetTip (*blk, oldTip));
 
   blk = &NewBlock (a);
+  blk->rngseed = "00aabb";
   blk->metadata = 100;
   m.name = "andy";
   m.burns.emplace ("tn", 1.25);

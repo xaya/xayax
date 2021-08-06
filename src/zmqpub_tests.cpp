@@ -105,11 +105,13 @@ TEST_F (ZmqPubTests, BaseBlockData)
   blk.hash = "abc";
   blk.parent = "def";
   blk.height = 10;
+  blk.rngseed = "abcdef";
   blk.metadata = ParseJson (R"({"x": 42})");
 
   pub.TrackGame ("game");
   pub.SendBlockAttach (blk, "");
 
+  blk.rngseed = "00";
   blk.metadata = Json::Value ();
   pub.SendBlockDetach (blk, "");
 
@@ -121,6 +123,7 @@ TEST_F (ZmqPubTests, BaseBlockData)
             "hash": "abc",
             "parent": "def",
             "height": 10,
+            "rngseed": "abcdef",
             "x": 42
           },
         "admin": [],
@@ -136,7 +139,8 @@ TEST_F (ZmqPubTests, BaseBlockData)
           {
             "hash": "abc",
             "parent": "def",
-            "height": 10
+            "height": 10,
+            "rngseed": "00"
           },
         "admin": [],
         "moves": []

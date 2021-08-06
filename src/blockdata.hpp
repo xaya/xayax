@@ -91,6 +91,12 @@ struct BlockData
   uint64_t height = 0;
 
   /**
+   * The RNG seed value for this block.  This must be a hex string
+   * representing an uint256.
+   */
+  std::string rngseed;
+
+  /**
    * Other metadata (e.g. timestamps, RNG seed) that is just stored and
    * forwarded to the GSP.
    */
@@ -109,7 +115,8 @@ struct BlockData
   friend bool operator== (const BlockData& a, const BlockData& b)
   {
     return a.hash == b.hash && a.parent == b.parent && a.height == b.height
-            && a.metadata == b.metadata && a.moves == b.moves;
+            && a.rngseed == b.rngseed && a.metadata == b.metadata
+            && a.moves == b.moves;
   }
 
   friend bool operator!= (const BlockData& a, const BlockData& b)

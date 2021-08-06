@@ -294,6 +294,7 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
   blkJson["hash"] = blk.hash;
   blkJson["parent"] = blk.parent;
   blkJson["height"] = static_cast<Json::Int64> (blk.height);
+  blkJson["rngseed"] = blk.rngseed;
   Json::Value blkTemplate(Json::objectValue);
   blkTemplate["block"] = blkJson;
   if (!reqtoken.empty ())

@@ -36,6 +36,9 @@ SetupSchema (Database& db)
       -- and must never end up on a branch in the future.
       `pruned` INTEGER NOT NULL,
 
+      -- The RNG seed as hex string.
+      `rngseed` TEXT NOT NULL,
+
       -- Extra data for the block (e.g. timestamp or RNG seed) that
       -- is just passed along to GSPs, stored as serialised JSON.
       `metadata` TEXT NULL,
@@ -91,14 +94,15 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
 
   auto stmt = db.Prepare (R"(
     INSERT INTO `blocks`
-      (`hash`, `parent`, `height`, `branch`, `pruned`, `metadata`)
-      VALUES (?1, ?2, ?3, ?4, 0, ?5)
+      (`hash`, `parent`, `height`, `branch`, `pruned`, `rngseed`, `metadata`)
+      VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)
   )");
   stmt.Bind (1, blk.hash);
   stmt.Bind (2, blk.parent);
   stmt.Bind (3, blk.height);
   stmt.Bind (4, branch);
-  stmt.Bind (5, blk.metadata);
+  stmt.Bind (5, blk.rngseed);
+  stmt.Bind (6, blk.metadata);
   stmt.Execute ();
 
   for (const auto& m : blk.moves)
@@ -439,7 +443,7 @@ Chainstate::GetForkBranch (const std::string& hash,
         return true;
 
       stmt = PrepareRo (R"(
-        SELECT `hash`, `parent`, `height`, `metadata`, `pruned`
+        SELECT `hash`, `parent`, `height`, `rngseed`, `metadata`, `pruned`
           FROM `blocks`
           WHERE `branch` = ?1 AND `height` <= ?2
           ORDER BY `height` DESC
@@ -450,13 +454,14 @@ Chainstate::GetForkBranch (const std::string& hash,
       while (stmt.Step ())
         {
           BlockData blk;
-          CHECK_EQ (stmt.Get<int64_t> (4), 0)
+          CHECK_EQ (stmt.Get<int64_t> (5), 0)
               << "Block " << blk.hash << " on branch " << curBranch
               << " is already pruned";
           blk.hash = stmt.Get<std::string> (0);
           blk.parent = stmt.Get<std::string> (1);
           blk.height = stmt.Get<uint64_t> (2);
-          blk.metadata = stmt.Get<Json::Value> (3);
+          blk.rngseed = stmt.Get<std::string> (3);
+          blk.metadata = stmt.Get<Json::Value> (4);
 
           auto moves = PrepareRo (R"(
             SELECT `ns`, `name`, `mv`, `burns`, `metadata`
@@ -518,7 +523,7 @@ Chainstate::Prune (const uint64_t untilHeight)
 
       stmt = Prepare (R"(
         UPDATE `blocks`
-          SET `pruned` = 1, `metadata` = NULL
+          SET `pruned` = 1, `rngseed` = "", `metadata` = NULL
           WHERE `hash` = ?1
       )");
       stmt.Bind (1, hash);
