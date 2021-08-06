@@ -27,6 +27,8 @@ private:
    */
   const std::string endpoint;
 
+  /* FIXME: Include ZMQ listener to push tip changes.  */
+
   friend class CoreRpc;
 
 public:
