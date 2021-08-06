@@ -360,6 +360,8 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   blk = &NewBlock (a);
   blk->metadata = 100;
   m.name = "andy";
+  m.burns.emplace ("tn", 1.25);
+  m.burns.emplace ("xs", "100");
   blk->moves.push_back (m);
   const std::string b = blk->hash;
   ASSERT_TRUE (state.SetTip (*blk, oldTip));

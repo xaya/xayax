@@ -195,6 +195,13 @@ PerTxData::PerTxData (const MoveData& mv)
 
       Json::Value thisGame = txTemplate;
       thisGame["move"] = *it;
+
+      const auto mit = mv.burns.find (gameId);
+      if (mit == mv.burns.end ())
+        thisGame["burnt"] = 0;
+      else
+        thisGame["burnt"] = mit->second;
+
       CHECK (moves.emplace (gameId, thisGame).second)
           << "We already have move data for " << gameId;
     }

@@ -225,17 +225,20 @@ TEST_F (ZmqPubTests, MovesAndAdmin)
             {
               "txid": "mv1",
               "name": "domob",
-              "move": ""
+              "move": "",
+              "burnt": 0
             },
             {
               "txid": "mv2",
               "name": "andy",
-              "move": [1, 2, 3]
+              "move": [1, 2, 3],
+              "burnt": 0
             },
             {
               "txid": "mv3",
               "name": "domob",
-              "move": null
+              "move": null,
+              "burnt": 0
             }
           ]
       }
@@ -252,6 +255,7 @@ TEST_F (ZmqPubTests, MoveMetadata)
       "cmd": 42
     }
   )");
+  mv.burns.emplace ("game", 5);
   mv.metadata = ParseJson (R"(
     {
       "meta": "?",
@@ -265,6 +269,8 @@ TEST_F (ZmqPubTests, MoveMetadata)
       "g": {"game": "x"}
     }
   )");
+  mv.burns.emplace ("foo", 42);
+  mv.burns.emplace ("game", 100);
   mv.metadata = ParseJson (R"(
     {
       "meta": "?",
@@ -296,7 +302,8 @@ TEST_F (ZmqPubTests, MoveMetadata)
               "name": "domob",
               "move": "x",
               "meta": "?",
-              "data": "!"
+              "data": "!",
+              "burnt": 100
             }
           ]
       }
@@ -414,7 +421,8 @@ TEST_F (ZmqPubTests, TrackedGames)
             {
               "txid": "move",
               "name": "domob",
-              "move": 42
+              "move": 42,
+              "burnt": 0
             }
           ]
       }
@@ -433,7 +441,8 @@ TEST_F (ZmqPubTests, TrackedGames)
             {
               "txid": "move",
               "name": "domob",
-              "move": 42
+              "move": 42,
+              "burnt": 0
             }
           ]
       }
@@ -456,7 +465,8 @@ TEST_F (ZmqPubTests, TrackedGames)
             {
               "txid": "move",
               "name": "domob",
-              "move": {"x": true}
+              "move": {"x": true},
+              "burnt": 0
             }
           ]
       }

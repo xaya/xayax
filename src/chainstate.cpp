@@ -60,6 +60,11 @@ SetupSchema (Database& db)
       `ns` TEXT NOT NULL,
       `name` TEXT NOT NULL,
       `mv` TEXT NOT NULL,
+
+      -- Burn data is stored as a serialised JSON object for
+      -- simplicity.
+      `burns` TEXT NOT NULL,
+
       `metadata` TEXT NOT NULL
 
     );
@@ -98,16 +103,21 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
 
   for (const auto& m : blk.moves)
     {
+      Json::Value burnsJson(Json::objectValue);
+      for (const auto& entry : m.burns)
+        burnsJson[entry.first] = entry.second;
+
       auto ins = db.Prepare (R"(
         INSERT INTO `moves`
-          (`block`, `ns`, `name`, `mv`, `metadata`)
-          VALUES (?1, ?2, ?3, ?4, ?5)
+          (`block`, `ns`, `name`, `mv`, `burns`, `metadata`)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
       )");
       ins.Bind (1, blk.hash);
       ins.Bind (2, m.ns);
       ins.Bind (3, m.name);
       ins.Bind (4, m.mv);
-      ins.Bind (5, m.metadata);
+      ins.Bind (5, burnsJson);
+      ins.Bind (6, m.metadata);
       ins.Execute ();
     }
 
@@ -449,7 +459,7 @@ Chainstate::GetForkBranch (const std::string& hash,
           blk.metadata = stmt.Get<Json::Value> (3);
 
           auto moves = PrepareRo (R"(
-            SELECT `ns`, `name`, `mv`, `metadata`
+            SELECT `ns`, `name`, `mv`, `burns`, `metadata`
               FROM `moves`
               WHERE `block` = ?1
               ORDER BY `id` ASC
@@ -461,7 +471,16 @@ Chainstate::GetForkBranch (const std::string& hash,
               m.ns = moves.Get<std::string> (0);
               m.name = moves.Get<std::string> (1);
               m.mv = moves.Get<std::string> (2);
-              m.metadata = moves.Get<Json::Value> (3);
+              m.metadata = moves.Get<Json::Value> (4);
+
+              const auto burnsJson = moves.Get<Json::Value> (3);
+              CHECK (burnsJson.isObject ());
+              for (auto it = burnsJson.begin (); it != burnsJson.end (); ++it)
+                {
+                  CHECK (it.key ().isString ());
+                  CHECK (m.burns.emplace (it.key ().asString (), *it).second);
+                }
+
               blk.moves.emplace_back (std::move (m));
             }
 

@@ -8,6 +8,7 @@
 #include <json/json.h>
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -37,8 +38,18 @@ struct MoveData
   std::string mv;
 
   /**
+   * Information about CHI burns in that move, which is something
+   * per-game (because the burn has to commit to a particular game ID).
+   *
+   * The ZMQ publisher picks out the right value from here based
+   * on the game ID that it publishes for at the moment.
+   */
+  std::map<std::string, Json::Value> burns;
+
+  /**
    * Other metadata (e.g. transferred coins) that is just stored
-   * and forwarded to GSPs.
+   * and forwarded to GSPs.  This includes everything which is not directly
+   * parsed/processed by the SDK (i.e. libxayagame mostly) itself.
    */
   Json::Value metadata;
 
@@ -52,7 +63,7 @@ struct MoveData
   friend bool operator== (const MoveData& a, const MoveData& b)
   {
     return a.txid == b.txid && a.ns == b.ns && a.name == b.name && a.mv == b.mv
-            && a.metadata == b.metadata;
+            && a.burns == b.burns && a.metadata == b.metadata;
   }
 
   friend bool operator!= (const MoveData& a, const MoveData& b)
