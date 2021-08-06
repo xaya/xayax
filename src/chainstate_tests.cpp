@@ -399,6 +399,38 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
     }, "is already pruned");
 }
 
+TEST_F (ChainstateTests, UpdateBatch)
+{
+  Chainstate::UpdateBatch outer(state);
+  const auto genesis = SetGenesis (10);
+
+  std::string a;
+  {
+    Chainstate::UpdateBatch inner(state);
+    a = AddBlock (genesis);
+    inner.Commit ();
+  }
+
+  uint64_t height;
+  ASSERT_TRUE (state.GetHeightForHash (genesis, height));
+  ASSERT_TRUE (state.GetHeightForHash (a, height));
+
+  std::string b;
+  {
+    Chainstate::UpdateBatch inner(state);
+    b = AddBlock (genesis);
+    ASSERT_TRUE (state.GetHeightForHash (b, height));
+    /* Let the batch revert.  */
+  }
+  ASSERT_FALSE (state.GetHeightForHash (b, height));
+
+  outer.Commit ();
+
+  ASSERT_TRUE (state.GetHeightForHash (genesis, height));
+  ASSERT_TRUE (state.GetHeightForHash (a, height));
+  ASSERT_FALSE (state.GetHeightForHash (b, height));
+}
+
 /* ************************************************************************** */
 
 } // anonymous namespace

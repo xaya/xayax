@@ -48,6 +48,8 @@ class Chainstate : private Database
 
 public:
 
+  class UpdateBatch;
+
   /**
    * Constructs the instance, using the given file as underlying SQLite
    * database for state storage.  The file is created as a new database
@@ -123,6 +125,36 @@ public:
    * meant for testing, not production.
    */
   void SanityCheck () const;
+
+};
+
+/**
+ * Helper class that performs a batched update of the database using RAII
+ * semantics.  When created, it will place a savepoint in the database,
+ * which can then either be committed explicitly on success, or will
+ * be reverted otherwise in the destructor.
+ */
+class Chainstate::UpdateBatch
+{
+
+private:
+
+  /** The associated chainstate instance.  */
+  Chainstate& parent;
+
+  /** Set to true if the update has been committed.  */
+  bool committed = false;
+
+public:
+
+  explicit UpdateBatch (Chainstate& p);
+  ~UpdateBatch ();
+
+  /**
+   * Marks this update as being succeeded, which will commit the
+   * underlying database savepoint.
+   */
+  void Commit ();
 
 };
 

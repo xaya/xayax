@@ -177,6 +177,10 @@ Sync::UpdateStep ()
      a reorg fork point.  */
   nextStartHeight = -1;
 
+  /* Attach the actual blocks.  We batch this update in the database,
+     so that we avoid many unnecessary disk writes while we are still
+     catching up in large chunks.  */
+  Chainstate::UpdateBatch upd(chain);
   for (unsigned i = 1; i < blocks.size (); ++i)
     {
       std::string prev;
@@ -184,6 +188,7 @@ Sync::UpdateStep ()
       CHECK_EQ (prev, blocks[i].parent);
       CHECK_EQ (prev, blocks[i - 1].hash);
     }
+  upd.Commit ();
 
   /* Only notify about a new tip if we actually have a new tip.  This makes
      sure we are not notifying for the case that only the current tip was

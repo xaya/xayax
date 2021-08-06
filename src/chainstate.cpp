@@ -90,8 +90,6 @@ SetupSchema (Database& db)
 void
 InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
 {
-  db.Prepare ("SAVEPOINT `insert-block`").Execute ();
-
   auto stmt = db.Prepare (R"(
     INSERT INTO `blocks`
       (`hash`, `parent`, `height`, `branch`, `pruned`, `rngseed`, `metadata`)
@@ -124,8 +122,6 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
       ins.Bind (6, m.metadata);
       ins.Execute ();
     }
-
-  db.Prepare ("RELEASE `insert-block`").Execute ();
 }
 
 /**
@@ -168,8 +164,6 @@ MarkAsTip (const Chainstate& s, Database& db, const BlockData& blk)
   CHECK (stmt.Step ()) << "Block " << blk.hash << " does not yet exist";
   const auto oldBranch = stmt.Get<uint64_t> (0);
   CHECK (!stmt.Step ());
-
-  db.Prepare ("SAVEPOINT `mark-as-tip`").Execute ();
 
   if (oldBranch == 0)
     {
@@ -217,8 +211,6 @@ MarkAsTip (const Chainstate& s, Database& db, const BlockData& blk)
           upd2.Execute ();
         }
     }
-
-  db.Prepare ("RELEASE `mark-as-tip`").Execute ();
 }
 
 } // anonymous namespace
@@ -326,7 +318,9 @@ Chainstate::Initialise (const BlockData& genesis)
   )");
   SetupSchema (*this);
 
+  UpdateBatch upd(*this);
   InsertBlock (*this, genesis, 0);
+  upd.Commit ();
 }
 
 bool
@@ -367,7 +361,9 @@ Chainstate::SetTip (const BlockData& blk, std::string& oldTip)
       CHECK_EQ (blk.height, stmt.Get<uint64_t> (1));
       CHECK (!stmt.Step ());
 
+      UpdateBatch upd(*this);
       MarkAsTip (*this, *this, blk);
+      upd.Commit ();
       return true;
     }
 
@@ -394,12 +390,12 @@ Chainstate::SetTip (const BlockData& blk, std::string& oldTip)
 
   LOG (INFO)
       << "Attaching block " << blk.hash << " to " << blk.parent
-      << " as the new tip";
+      << " as the new tip at height " << blk.height;
 
-  Prepare ("SAVEPOINT `attach-new-tip`").Execute ();
+  UpdateBatch upd(*this);
   InsertBlock (*this, blk, GetFreeBranchNumber (*this));
   MarkAsTip (*this, *this, blk);
-  Prepare ("RELEASE `attach-new-tip`").Execute ();
+  upd.Commit ();
 
   return true;
 }
@@ -499,14 +495,14 @@ Chainstate::GetForkBranch (const std::string& hash,
 void
 Chainstate::Prune (const uint64_t untilHeight)
 {
-  Prepare ("SAVEPOINT `prune`").Execute ();
-
   auto query = PrepareRo (R"(
     SELECT `hash`
       FROM `blocks`
       WHERE (NOT `pruned`) AND `branch` = 0 AND `height` <= ?1
   )");
   query.Bind (1, untilHeight);
+
+  UpdateBatch upd(*this);
 
   unsigned cnt = 0;
   while (query.Step ())
@@ -523,14 +519,14 @@ Chainstate::Prune (const uint64_t untilHeight)
 
       stmt = Prepare (R"(
         UPDATE `blocks`
-          SET `pruned` = 1, `rngseed` = "", `metadata` = NULL
+          SET `pruned` = 1, `rngseed` = '', `metadata` = NULL
           WHERE `hash` = ?1
       )");
       stmt.Bind (1, hash);
       stmt.Execute ();
     }
 
-  Prepare ("RELEASE `prune`").Execute ();
+  upd.Commit ();
 
   LOG_IF (INFO, cnt > 0)
       << "Pruned extra data for " << cnt
@@ -640,6 +636,30 @@ Chainstate::SanityCheck () const
         }
     }
   CHECK (foundMain) << "No main branch found";
+}
+
+Chainstate::UpdateBatch::UpdateBatch (Chainstate& p)
+  : parent(p)
+{
+  parent.Prepare ("SAVEPOINT `update-batch`").Execute ();
+}
+
+Chainstate::UpdateBatch::~UpdateBatch ()
+{
+  if (committed)
+    return;
+
+  LOG (WARNING) << "Reverting failed update batch";
+  parent.Prepare ("ROLLBACK TO `update-batch`").Execute ();
+  parent.Prepare ("RELEASE `update-batch`").Execute ();
+}
+
+void
+Chainstate::UpdateBatch::Commit ()
+{
+  CHECK (!committed) << "Update is already committed";
+  committed = true;
+  parent.Prepare ("RELEASE `update-batch`").Execute ();
 }
 
 } // namespace xayax
