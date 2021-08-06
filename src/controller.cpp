@@ -375,6 +375,8 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
      while the process is running, so it is fine to read them here without
      holding the parent mutex.  */
 
+  std::lock_guard<std::mutex> lock(mutChain);
+
   if (parent.sanityChecks)
     chain.SanityCheck ();
 
