@@ -30,7 +30,7 @@ namespace
 namespace fs = std::experimental::filesystem;
 
 /** Maximum number of attaches sent for a game_sendupdates.  */
-constexpr unsigned MAX_BLOCK_ATTACHES = 1'024;
+constexpr unsigned MAX_BLOCK_ATTACHES = 128;
 
 } // anonymous namespace
 
