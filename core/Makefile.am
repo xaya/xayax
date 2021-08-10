@@ -1,3 +1,5 @@
+SUBDIRS = tests
+
 bin_PROGRAMS = xayax-core
 
 EXTRA_DIST = rpc-stubs/core.json
