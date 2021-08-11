@@ -4,7 +4,8 @@ AM_TESTS_ENVIRONMENT = \
 TEST_LIBRARY = coretest.py
 
 REGTESTS = \
-  block_data.py
+  block_data.py \
+  moves.py
 
 EXTRADIST = $(REGTESTS) $(TEST_LIBRARY)
 TESTS = $(REGTESTS)

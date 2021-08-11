@@ -10,9 +10,11 @@ Test fixture for testing the Xaya-X-on-Xaya-Core connector.
 from xayax import core, testcase
 
 import jsonrpclib
+from xayagametest import premine
 import zmq
 
 from contextlib import contextmanager
+import json
 import os
 import os.path
 import time
@@ -42,6 +44,8 @@ class Fixture (testcase.Fixture):
          core.Environment (self.basedir, self.portgen,
                            self.args.xayad_binary, xcoreBin).run () as env:
       self.env = env
+      premine.collect (self.env.createCoreRpc (), logger=self.log)
+      self.syncBlocks ()
       yield
 
   def generate (self, n):
@@ -63,3 +67,17 @@ class Fixture (testcase.Fixture):
     x = jsonrpclib.ServerProxy (self.env.getXRpcUrl ())
     while core.getbestblockhash () != x.getblockchaininfo ()["bestblockhash"]:
       time.sleep (0.1)
+
+  def sendMove (self, name, data, options={}):
+    """
+    Sends a move (name_register or name_update) with the given name
+    and the data given as JSON.
+    """
+
+    core = self.env.createCoreRpc ()
+    dataStr = json.dumps (data)
+
+    try:
+      return core.name_update (name, dataStr, options)
+    except:
+      return core.name_register (name, dataStr, options)
