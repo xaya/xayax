@@ -86,6 +86,19 @@ template <typename T>
 }
 
 /**
+ * Adds burn data to a move JSON.
+ */
+void
+AddBurnData (const MoveData& mv, const std::string& gameId, Json::Value& val)
+{
+  const auto mit = mv.burns.find (gameId);
+  if (mit == mv.burns.end ())
+    val["burnt"] = 0;
+  else
+    val["burnt"] = mit->second;
+}
+
+/**
  * Helper class that analyses a single move and extracts the data from it
  * that is relevant for our notifications.
  */
@@ -175,6 +188,7 @@ PerTxData::PerTxData (const MoveData& mv)
 
           adminCmd = txTemplate;
           adminCmd["cmd"] = value["cmd"];
+          AddBurnData (mv, adminGame, adminCmd);
         }
       return;
     }
@@ -195,12 +209,7 @@ PerTxData::PerTxData (const MoveData& mv)
 
       Json::Value thisGame = txTemplate;
       thisGame["move"] = *it;
-
-      const auto mit = mv.burns.find (gameId);
-      if (mit == mv.burns.end ())
-        thisGame["burnt"] = 0;
-      else
-        thisGame["burnt"] = mit->second;
+      AddBurnData (mv, gameId, thisGame);
 
       CHECK (moves.emplace (gameId, thisGame).second)
           << "We already have move data for " << gameId;

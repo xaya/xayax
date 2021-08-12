@@ -217,11 +217,13 @@ TEST_F (ZmqPubTests, MovesAndAdmin)
           [
             {
               "txid": "cmd1",
-              "cmd": "abc"
+              "cmd": "abc",
+              "burnt": 0
             },
             {
               "txid": "cmd2",
-              "cmd": null
+              "cmd": null,
+              "burnt": 0
             }
           ],
         "moves":
@@ -296,7 +298,8 @@ TEST_F (ZmqPubTests, MoveMetadata)
               "txid": "cmd",
               "cmd": 42,
               "meta": "?",
-              "data": "!"
+              "data": "!",
+              "burnt": 5
             }
           ],
         "moves":
@@ -437,7 +440,8 @@ TEST_F (ZmqPubTests, TrackedGames)
           [
             {
               "txid": "cmd1",
-              "cmd": "foo cmd"
+              "cmd": "foo cmd",
+              "burnt": 0
             }
           ],
         "moves":
@@ -461,7 +465,8 @@ TEST_F (ZmqPubTests, TrackedGames)
           [
             {
               "txid": "cmd2",
-              "cmd": "bar cmd"
+              "cmd": "bar cmd",
+              "burnt": 0
             }
           ],
         "moves":
@@ -481,7 +486,8 @@ TEST_F (ZmqPubTests, TrackedGames)
           [
             {
               "txid": "cmd2",
-              "cmd": "bar cmd"
+              "cmd": "bar cmd",
+              "burnt": 0
             }
           ],
         "moves": []
