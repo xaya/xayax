@@ -290,6 +290,25 @@ TEST_F (SyncTests, ShortReorg)
   cb.WaitForTip (reorg.hash);
 }
 
+TEST_F (SyncTests, ReactivatingKnownChain)
+{
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+
+  const auto branch1 = base.AttachBranch (genesis.hash, 10);
+  StartSync (genesis);
+  cb.WaitForTip (branch1.back ().hash);
+  StopSync ();
+
+  const auto branch2 = base.AttachBranch (genesis.hash, 10);
+  StartSync (genesis);
+  cb.WaitForTip (branch2.back ().hash);
+  StopSync ();
+
+  base.SetTip (branch1.back ());
+  StartSync (genesis);
+  cb.WaitForTip (branch1.back ().hash);
+}
+
 TEST_F (SyncTests, NoSuperfluousUpdateCalls)
 {
   /* Make sure that the update callback is not invoked if the tip

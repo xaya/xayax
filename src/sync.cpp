@@ -6,6 +6,7 @@
 
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <chrono>
 
 namespace xayax
@@ -162,6 +163,15 @@ Sync::UpdateStep ()
       << " from the base chain";
   const auto blocks = base.GetBlockRange (startHeight, num);
 
+  /* If we are reactivating a chain that we already have locally by
+     attaching one of the blocks in that current fork, we need to query
+     the corresponding fork branch to get the attach blocks for the
+     call to TipUpdatedFrom that precede the blocks we have queried now
+     from the base chain.  */
+  std::vector<BlockData> oldForkBranch;
+  if (!blocks.empty ())
+    chain.GetForkBranch (blocks.front ().parent, oldForkBranch);
+
   std::string oldTip;
   if (blocks.empty () || !chain.SetTip (blocks.front (), oldTip))
     {
@@ -194,7 +204,12 @@ Sync::UpdateStep ()
      returned in our query.  */
   Callbacks* cbCopy = cb;
   if (cbCopy != nullptr && oldTip != blocks.back ().hash)
-    cbCopy->TipUpdatedFrom (oldTip, blocks);
+    {
+      std::reverse (oldForkBranch.begin (), oldForkBranch.end ());
+      for (const auto& b : blocks)
+        oldForkBranch.push_back (b);
+      cbCopy->TipUpdatedFrom (oldTip, oldForkBranch);
+    }
 
   /* If we received fewer blocks than requested, we are caught up.  */
   if (blocks.size () < num)

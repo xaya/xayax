@@ -273,10 +273,10 @@ TEST_F (ControllerTests, Reorg)
   const auto a = base.SetTip (base.NewBlock ());
   const auto b = base.SetTip (base.NewBlock ());
   ExpectZmq ({}, {genesis, a, b});
-  const auto c = base.SetTip (base.NewBlock (a.hash));
-  ExpectZmq ({b}, {c});
-  const auto d = base.SetTip (base.NewBlock (b.hash));
-  ExpectZmq ({c}, {b, d});
+  const auto branch1 = base.AttachBranch (a.hash, 2);
+  ExpectZmq ({b}, {branch1[0], branch1[1]});
+  const auto branch2 = base.AttachBranch (b.hash, 2);
+  ExpectZmq ({branch1[1], branch1[0]}, {b, branch2[0], branch2[1]});
 }
 
 TEST_F (ControllerTests, Restart)

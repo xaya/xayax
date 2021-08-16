@@ -442,11 +442,9 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
   if (!attaches.empty ())
     {
       /* A special case is if we just detached blocks.  In this case,
-         attaches will have one element and that one will be the parent
-         block of the detached ones; we are not actually attaching a block
-         in this case.  */
-      if (attaches.size () == 1 && !detach.empty ()
-            && attaches.front ().hash == detach.back ().parent)
+         the last attached block will be the new tip, and the parent
+         of the last detached one.  */
+      if (!detach.empty () && attaches.back ().hash == detach.back ().parent)
         return;
 
       bool foundForkPoint = false;
