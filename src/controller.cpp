@@ -270,8 +270,11 @@ Controller::RpcServer::game_sendupdates (const std::string& from,
   }
 
   std::vector<BlockData> detaches, attaches;
-  run.PushZmqBlocks (from, {}, MAX_BLOCK_ATTACHES, reqtoken.str (),
-                     detaches, attaches);
+  {
+    std::lock_guard<std::mutex> lock(run.mutChain);
+    run.PushZmqBlocks (from, {}, MAX_BLOCK_ATTACHES, reqtoken.str (),
+                       detaches, attaches);
+  }
 
   std::string toBlock;
   if (!attaches.empty ())
@@ -375,8 +378,6 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
      while the process is running, so it is fine to read them here without
      holding the parent mutex.  */
 
-  std::lock_guard<std::mutex> lock(mutChain);
-
   if (parent.sanityChecks)
     chain.SanityCheck ();
 
@@ -398,8 +399,6 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
                                     std::vector<BlockData>& detach,
                                     std::vector<BlockData>& queriedAttach)
 {
-  std::lock_guard<std::mutex> lockChain(mutChain);
-
   detach.clear ();
   if (!from.empty () && !chain.GetForkBranch (from, detach))
     {

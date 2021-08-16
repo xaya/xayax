@@ -101,8 +101,6 @@ public:
   TipUpdatedFrom (const std::string& oldTip,
                   const std::vector<BlockData>& attaches) override
   {
-    std::lock_guard<std::mutex> lock(mutChain);
-
     CHECK_EQ (oldTip, currentTip);
     currentTip = GetCurrentTip (chain);
 

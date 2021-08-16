@@ -154,6 +154,10 @@ public:
    * is updated.  The old tip is passed in as well.  When the genesis block is
    * first set, oldTip will be passed as "".
    *
+   * When the callback is invoked, the chain mutex is already locked,
+   * so that the callback processing can be atomic in the chainstate
+   * with the update done here.
+   *
    * The sequence of last blocks attached (which may go back before the
    * actual fork point, but whose last block will be the new tip) is passed
    * as well, as it can be useful e.g. for sending ZMQ notifications.

@@ -127,7 +127,7 @@ Sync::RetrieveGenesis (std::vector<BlockData>& blocks)
 bool
 Sync::UpdateStep ()
 {
-  std::unique_lock<std::mutex> lock(mutChain);
+  std::lock_guard<std::mutex> lock(mutChain);
 
   int64_t startHeight = nextStartHeight;
   if (nextStartHeight == -1)
@@ -140,7 +140,6 @@ Sync::UpdateStep ()
             return false;
 
           Callbacks* cbCopy = cb;
-          lock.unlock ();
           if (cbCopy != nullptr)
             cbCopy->TipUpdatedFrom ("", blocks);
 
@@ -194,10 +193,8 @@ Sync::UpdateStep ()
      sure we are not notifying for the case that only the current tip was
      returned in our query.  */
   Callbacks* cbCopy = cb;
-  lock.unlock ();
   if (cbCopy != nullptr && oldTip != blocks.back ().hash)
     cbCopy->TipUpdatedFrom (oldTip, blocks);
-  lock.lock ();
 
   /* If we received fewer blocks than requested, we are caught up.  */
   if (blocks.size () < num)
