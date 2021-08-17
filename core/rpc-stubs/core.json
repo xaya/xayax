@@ -10,6 +10,11 @@
     "returns": {}
   },
   {
+    "name": "getzmqnotifications",
+    "params": {},
+    "returns": []
+  },
+  {
     "name": "getblockhash",
     "params":
       {

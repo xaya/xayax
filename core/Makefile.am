@@ -11,11 +11,11 @@ CLEANFILES = $(RPC_STUBS)
 
 xayax_core_CXXFLAGS = \
   -I$(top_srcdir)/src \
-  $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) \
+  $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) $(ZMQ_CFLAGS) \
   $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
 xayax_core_LDADD = \
   $(top_builddir)/src/libxayax.la \
-  $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) \
+  $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) $(ZMQ_LIBS) \
   $(GFLAGS_LIBS) $(GLOG_LIBS)
 xayax_core_SOURCES = main.cpp \
   corechain.cpp

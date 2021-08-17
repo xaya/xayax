@@ -7,6 +7,8 @@
 
 #include "basechain.hpp"
 
+#include <memory>
+
 namespace xayax
 {
 
@@ -20,6 +22,8 @@ class CoreChain : public BaseChain
 
 private:
 
+  class ZmqListener;
+
   /**
    * RPC endpoint for Xaya Core.  We store the endpoint as string and
    * establish a new HTTP connection and RPC client for each request, so
@@ -27,15 +31,17 @@ private:
    */
   const std::string endpoint;
 
-  /* FIXME: Include ZMQ listener to push tip changes.  */
+  /** ZMQ listener for tip updates on Xaya Core.  */
+  std::unique_ptr<ZmqListener> listener;
 
   friend class CoreRpc;
 
 public:
 
-  explicit CoreChain (const std::string& ep)
-    : endpoint(ep)
-  {}
+  explicit CoreChain (const std::string& ep);
+  ~CoreChain ();
+
+  void Start () override;
 
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;

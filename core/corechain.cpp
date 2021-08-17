@@ -9,15 +9,20 @@
 #include <jsonrpccpp/client.h>
 #include <jsonrpccpp/client/connectors/httpclient.h>
 #include <jsonrpccpp/common/exception.h>
+#include <zmq.hpp>
 
 #include <glog/logging.h>
 
+#include <atomic>
 #include <algorithm>
 #include <map>
 #include <sstream>
+#include <thread>
 
 namespace xayax
 {
+
+/* ************************************************************************** */
 
 namespace
 {
@@ -173,6 +178,13 @@ ConstructBlockData (const Json::Value& data)
 
 } // anonymous namespace
 
+/* ************************************************************************** */
+
+/**
+ * Simple wrapper around a JSON-RPC connection to the Xaya Core endpoint.
+ * We use a fresh instance of this every time we need one, just for simplicity
+ * and to ensure thread safety.
+ */
 class CoreRpc
 {
 
@@ -197,6 +209,135 @@ public:
   }
 
 };
+
+/* ************************************************************************** */
+
+/**
+ * Simple ZMQ listener class for the Xaya Core -zmqpubhashblock endpoint,
+ * which just notifies the BaseChain about a new tip to request every time
+ * a notification is received.
+ */
+class CoreChain::ZmqListener
+{
+
+private:
+
+  /** Parent instance that gets notified about blocks.  */
+  CoreChain& parent;
+
+  /** ZMQ context for this listener.  */
+  zmq::context_t ctx;
+
+  /** ZMQ socket for this listener.  */
+  zmq::socket_t sock;
+
+  /** Flag to indicate if the receiver thread should stop.  */
+  std::atomic<bool> shouldStop;
+
+  /** Background thread running the ZMQ receiver.  */
+  std::unique_ptr<std::thread> receiver;
+
+  /**
+   * Worker method that runs on the receiver thread.
+   */
+  void
+  ReceiveLoop ()
+  {
+    while (!shouldStop)
+      {
+        zmq::message_t msg;
+        if (!sock.recv (msg, zmq::recv_flags::dontwait))
+          {
+            /* No messages available.  Just sleep a bit and try again.  */
+            std::this_thread::sleep_for (std::chrono::milliseconds (1));
+            continue;
+          }
+
+        /* We don't care about the actual message body.  We just take the
+           signal of a message being received as a hint that there may be a
+           new tip to request.  */
+        while (sock.get (zmq::sockopt::rcvmore))
+          {
+            /* Multipart messages are delivered atomically.  As long as
+               there are more parts, they are guaranteed to be available
+               now as well.  */
+            CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
+          }
+
+        parent.TipChanged ();
+      }
+  }
+
+public:
+
+  /**
+   * Constructs the listener, connecting it already to the given address
+   * and starting the receiver thread.
+   */
+  explicit ZmqListener (CoreChain& p, const std::string& addr)
+    : parent(p), sock(ctx, ZMQ_SUB), shouldStop(false)
+  {
+    sock.connect (addr);
+    sock.set (zmq::sockopt::subscribe, "hashblock");
+    receiver = std::make_unique<std::thread> ([this] ()
+      {
+        ReceiveLoop ();
+      });
+  }
+
+  /**
+   * Destructs and stops the listener.
+   */
+  ~ZmqListener ()
+  {
+    CHECK (receiver != nullptr);
+    shouldStop = true;
+    receiver->join ();
+    receiver.reset ();
+    sock.close ();
+  }
+
+};
+
+/* ************************************************************************** */
+
+CoreChain::CoreChain (const std::string& ep)
+  : endpoint(ep)
+{}
+
+CoreChain::~CoreChain () = default;
+
+void
+CoreChain::Start ()
+{
+  CoreRpc rpc(*this);
+  const auto notifications = rpc->getzmqnotifications ();
+  CHECK (notifications.isArray ());
+
+  std::string addr;
+  for (const auto& n : notifications)
+    {
+      CHECK (n.isObject ());
+      if (n["type"].asString () == "pubhashblock")
+        {
+          addr = n["address"].asString ();
+          break;
+        }
+    }
+
+  if (addr.empty ())
+    {
+      LOG (WARNING)
+          << "Xaya Core has no -zmqpubhashblock notifier,"
+          << " relying on periodic polling only";
+      return;
+    }
+
+  LOG (INFO)
+      << "Using -zmqpubhashblock notifier at " << addr
+      << " for receiving tip updates from Xaya Core";
+  listener = std::make_unique<ZmqListener> (*this, addr);
+}
 
 std::vector<BlockData>
 CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
@@ -271,5 +412,7 @@ CoreChain::GetVersion ()
   const auto info = rpc->getnetworkinfo ();
   return info["version"].asUInt64 ();
 }
+
+/* ************************************************************************** */
 
 } // namespace xayax
