@@ -60,6 +60,7 @@ SetupSchema (Database& db)
       -- The block hash this corresponds to.
       `block` TEXT NOT NULL,
 
+      `txid` TEXT NOT NULL,
       `ns` TEXT NOT NULL,
       `name` TEXT NOT NULL,
       `mv` TEXT NOT NULL,
@@ -111,15 +112,16 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
 
       auto ins = db.Prepare (R"(
         INSERT INTO `moves`
-          (`block`, `ns`, `name`, `mv`, `burns`, `metadata`)
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+          (`block`, `txid`, `ns`, `name`, `mv`, `burns`, `metadata`)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
       )");
       ins.Bind (1, blk.hash);
-      ins.Bind (2, m.ns);
-      ins.Bind (3, m.name);
-      ins.Bind (4, m.mv);
-      ins.Bind (5, burnsJson);
-      ins.Bind (6, m.metadata);
+      ins.Bind (2, m.txid);
+      ins.Bind (3, m.ns);
+      ins.Bind (4, m.name);
+      ins.Bind (5, m.mv);
+      ins.Bind (6, burnsJson);
+      ins.Bind (7, m.metadata);
       ins.Execute ();
     }
 }
@@ -460,7 +462,7 @@ Chainstate::GetForkBranch (const std::string& hash,
           blk.metadata = stmt.Get<Json::Value> (4);
 
           auto moves = PrepareRo (R"(
-            SELECT `ns`, `name`, `mv`, `burns`, `metadata`
+            SELECT `txid`, `ns`, `name`, `mv`, `burns`, `metadata`
               FROM `moves`
               WHERE `block` = ?1
               ORDER BY `id` ASC
@@ -469,12 +471,13 @@ Chainstate::GetForkBranch (const std::string& hash,
           while (moves.Step ())
             {
               MoveData m;
-              m.ns = moves.Get<std::string> (0);
-              m.name = moves.Get<std::string> (1);
-              m.mv = moves.Get<std::string> (2);
-              m.metadata = moves.Get<Json::Value> (4);
+              m.txid = moves.Get<std::string> (0);
+              m.ns = moves.Get<std::string> (1);
+              m.name = moves.Get<std::string> (2);
+              m.mv = moves.Get<std::string> (3);
+              m.metadata = moves.Get<Json::Value> (5);
 
-              const auto burnsJson = moves.Get<Json::Value> (3);
+              const auto burnsJson = moves.Get<Json::Value> (4);
               CHECK (burnsJson.isObject ());
               for (auto it = burnsJson.begin (); it != burnsJson.end (); ++it)
                 {

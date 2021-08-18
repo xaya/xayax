@@ -343,6 +343,7 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   })");
 
   MoveData m;
+  m.txid = "txid";
   m.ns = "p";
   m.name = "domob";
   m.mv = "foo";
