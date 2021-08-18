@@ -30,7 +30,8 @@ constexpr const char* PREFIX_DETACH = "game-block-detach";
  * if parsing was successful and the move is considered valid.
  */
 bool
-ParseMoveJson (const std::string& str, Json::Value& val)
+ParseMoveJson (const std::string& txid, const std::string& str,
+               Json::Value& val)
 {
   /* Moves are the main user-provided input that we have to be very careful
      in processing.  Univalue is used as the first line of defence in parsing
@@ -40,7 +41,7 @@ ParseMoveJson (const std::string& str, Json::Value& val)
   UniValue value;
   if (!value.read (str) || !value.isObject ())
     {
-      LOG (WARNING) << "Move data is invalid JSON:\n" << str;
+      LOG (WARNING) << "Move data for " << txid << " is invalid JSON:\n" << str;
       return false;
     }
   const std::string filtered = value.write ();
@@ -166,7 +167,7 @@ public:
 PerTxData::PerTxData (const MoveData& mv)
 {
   Json::Value value;
-  if (!ParseMoveJson (mv.mv, value))
+  if (!ParseMoveJson (mv.txid, mv.mv, value))
     {
       /* This is not a valid move.  Just leave isAdmin as false and
          the per-game move array as empty.  */
