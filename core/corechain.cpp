@@ -311,6 +311,16 @@ void
 CoreChain::Start ()
 {
   CoreRpc rpc(*this);
+
+  /* We need at least Xaya Core 1.6, which supports burns in the
+     scriptPubKey JSON and returns a single address (rather than addresses)
+     for outputs that are solvable.  */
+  const auto info = rpc->getnetworkinfo ();
+  const uint64_t version = info["version"].asUInt64 ();
+  CHECK_GE (version, 1'06'00'00)
+      << "Xaya Core version is " << version << ", need at least 1.6.0";
+  LOG (INFO) << "Connected to Xaya Core version " << version;
+
   const auto notifications = rpc->getzmqnotifications ();
   CHECK (notifications.isArray ());
 
