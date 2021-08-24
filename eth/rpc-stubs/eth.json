@@ -1,0 +1,32 @@
+[
+  {
+    "name": "eth_getBlockByNumber",
+    "params": ["0x123", false],
+    "returns": {}
+  },
+  {
+    "name": "eth_getLogs",
+    "params": [{}],
+    "returns": []
+  },
+  {
+    "name": "eth_blockNumber",
+    "params": [],
+    "returns": "0x123"
+  },
+  {
+    "name": "eth_chainId",
+    "params": [],
+    "returns": "0x123"
+  },
+  {
+    "name": "web3_clientVersion",
+    "params": [],
+    "returns": "geth 42.0"
+  },
+  {
+    "name": "web3_sha3",
+    "params": ["0x112233"],
+    "returns": "0x123"
+  }
+]
