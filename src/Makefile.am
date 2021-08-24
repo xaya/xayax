@@ -19,14 +19,16 @@ libxayax_la_LIBADD = \
 libxayax_la_SOURCES = \
   basechain.cpp \
   controller.cpp \
-  database.cpp \
   chainstate.cpp \
+  database.cpp \
+  rpcutils.cpp \
   sync.cpp \
   zmqpub.cpp
 xayax_HEADERS = \
   basechain.hpp \
+  blockdata.hpp \
   controller.hpp \
-  blockdata.hpp
+  rpcutils.hpp
 noinst_HEADERS = \
   private/database.hpp \
   private/chainstate.hpp \
@@ -50,6 +52,7 @@ check_HEADERS = testutils.hpp
 tests_SOURCES = testutils.cpp \
   chainstate_tests.cpp \
   controller_tests.cpp \
+  rpcutils_tests.cpp \
   sync_tests.cpp \
   testutils_tests.cpp \
   zmqpub_tests.cpp

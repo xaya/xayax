@@ -34,8 +34,6 @@ private:
   /** ZMQ listener for tip updates on Xaya Core.  */
   std::unique_ptr<ZmqListener> listener;
 
-  friend class CoreRpc;
-
 public:
 
   explicit CoreChain (const std::string& ep);

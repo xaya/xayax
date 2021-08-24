@@ -4,10 +4,11 @@
 
 #include "corechain.hpp"
 
+#include "rpcutils.hpp"
+
 #include "rpc-stubs/corerpcclient.h"
 
 #include <jsonrpccpp/client.h>
-#include <jsonrpccpp/client/connectors/httpclient.h>
 #include <jsonrpccpp/common/exception.h>
 #include <zmq.hpp>
 
@@ -16,7 +17,6 @@
 #include <atomic>
 #include <algorithm>
 #include <map>
-#include <sstream>
 #include <thread>
 
 namespace xayax
@@ -26,26 +26,6 @@ namespace xayax
 
 namespace
 {
-
-/**
- * Converts a hex string to a binary string.
- */
-std::string
-Unhexlify (const std::string& hex)
-{
-  CHECK_EQ (hex.size () % 2, 0);
-
-  std::string res;
-  for (size_t i = 0; i < hex.size (); i += 2)
-    {
-      std::istringstream in(hex.substr (i, 2));
-      int val;
-      in >> std::hex >> val;
-      res.push_back (static_cast<char> (val));
-    }
-
-  return res;
-}
 
 /**
  * Converts a JSON transaction to a MoveData instance.  Returns false
@@ -84,7 +64,8 @@ GetMoveFromTx (const Json::Value& data, MoveData& mv)
         {
           const auto& burnVal = scriptPubKey["burn"];
           CHECK (burnVal.isString ());
-          std::string burn = Unhexlify (burnVal.asString ());
+          std::string burn;
+          CHECK (Unhexlify (burnVal.asString (), burn));
           if (burn.substr (0, 2) == "g/")
             {
               burn = burn.substr (2);
@@ -176,39 +157,9 @@ ConstructBlockData (const Json::Value& data)
   return res;
 }
 
+using CoreRpc = RpcClient<CoreRpcClient, jsonrpc::JSONRPC_CLIENT_V1>;
+
 } // anonymous namespace
-
-/* ************************************************************************** */
-
-/**
- * Simple wrapper around a JSON-RPC connection to the Xaya Core endpoint.
- * We use a fresh instance of this every time we need one, just for simplicity
- * and to ensure thread safety.
- */
-class CoreRpc
-{
-
-private:
-
-  /** HTTP server instance.  */
-  jsonrpc::HttpClient http;
-
-  /** RPC client.  */
-  CoreRpcClient rpc;
-
-public:
-
-  explicit CoreRpc (const CoreChain& chain)
-    : http(chain.endpoint), rpc(http, jsonrpc::JSONRPC_CLIENT_V1)
-  {}
-
-  CoreRpcClient*
-  operator-> ()
-  {
-    return &rpc;
-  }
-
-};
 
 /* ************************************************************************** */
 
@@ -310,7 +261,7 @@ CoreChain::~CoreChain () = default;
 void
 CoreChain::Start ()
 {
-  CoreRpc rpc(*this);
+  CoreRpc rpc(endpoint);
 
   /* We need at least Xaya Core 1.6, which supports burns in the
      scriptPubKey JSON and returns a single address (rather than addresses)
@@ -355,7 +306,7 @@ CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
   if (count == 0)
     return {};
 
-  CoreRpc rpc(*this);
+  CoreRpc rpc(endpoint);
   const uint64_t endHeight = start + count - 1;
   CHECK_GE (endHeight, start);
 
@@ -410,7 +361,7 @@ CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
 std::string
 CoreChain::GetChain ()
 {
-  CoreRpc rpc(*this);
+  CoreRpc rpc(endpoint);
   const auto info = rpc->getblockchaininfo ();
   return info["chain"].asString ();
 }
@@ -418,7 +369,7 @@ CoreChain::GetChain ()
 uint64_t
 CoreChain::GetVersion ()
 {
-  CoreRpc rpc(*this);
+  CoreRpc rpc(endpoint);
   const auto info = rpc->getnetworkinfo ();
   return info["version"].asUInt64 ();
 }
