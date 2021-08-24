@@ -4,6 +4,7 @@
 
 #include "ethchain.hpp"
 
+#include "abi.hpp"
 #include "rpcutils.hpp"
 
 #include "rpc-stubs/ethrpcclient.h"
@@ -34,26 +35,6 @@ const std::map<int64_t, std::string> CHAIN_IDS =
   };
 
 /**
- * Decodes a hex- or decimal encoded integer from a string.
- */
-int64_t
-DecodeInt (const std::string& str)
-{
-  int64_t res;
-  if (str.substr (0, 2) == "0x")
-    {
-      std::istringstream in(str.substr (2));
-      in >> std::hex >> res;
-    }
-  else
-    {
-      std::istringstream in(str);
-      in >> res;
-    }
-  return res;
-}
-
-/**
  * Encodes a given integer as hex string.
  */
 std::string
@@ -76,12 +57,13 @@ ExtractBaseData (const Json::Value& val)
   BlockData res;
   res.hash = val["hash"].asString ();
   res.parent = val["parentHash"].asString ();
-  res.height = DecodeInt (val["number"].asString ());
+  res.height = AbiDecoder::ParseInt (val["number"].asString ());
   /* FIXME: Determine proper value for rngseed.  */
   res.rngseed = res.hash;
 
   res.metadata = Json::Value (Json::objectValue);
-  res.metadata["timestamp"] = DecodeInt (val["timestamp"].asString ());
+  res.metadata["timestamp"]
+      = AbiDecoder::ParseInt (val["timestamp"].asString ());
 
   return res;
 }
@@ -99,7 +81,7 @@ TryBlockRange (EthRpc& rpc, const int64_t startHeight, int64_t endHeight,
 
   /* As the first step, reduce the endHeight if it is beyond the current tip.
      Afterwards, we expect to get blocks exactly up to endHeight.  */
-  const int64_t tipHeight = DecodeInt (rpc->eth_blockNumber ());
+  const int64_t tipHeight = AbiDecoder::ParseInt (rpc->eth_blockNumber ());
   if (tipHeight < endHeight)
     endHeight = tipHeight;
   if (endHeight < startHeight)
@@ -213,7 +195,7 @@ std::string
 EthChain::GetChain ()
 {
   EthRpc rpc(endpoint);
-  const int64_t chainId = DecodeInt (rpc->eth_chainId ());
+  const int64_t chainId = AbiDecoder::ParseInt (rpc->eth_chainId ());
   const auto mit = CHAIN_IDS.find (chainId);
   CHECK (mit != CHAIN_IDS.end ()) << "Unknown Ethereum chain ID: " << chainId;
   return mit->second;
