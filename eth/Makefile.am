@@ -1,3 +1,5 @@
+SUBDIRS = tests
+
 noinst_LTLIBRARIES = libethchain.la
 bin_PROGRAMS = xayax-eth
 
@@ -33,14 +35,14 @@ xayax_eth_LDADD = \
   $(GFLAGS_LIBS) $(GLOG_LIBS)
 xayax_eth_SOURCES = main.cpp
 
-check_PROGRAMS = tests
-TESTS = tests
+check_PROGRAMS = tests-unit
+TESTS = tests-unit
 
-tests_CXXFLAGS = \
+tests_unit_CXXFLAGS = \
   $(GLOG_CFLAGS) $(GTEST_CFLAGS)
-tests_LDADD = $(builddir)/libethchain.la \
+tests_unit_LDADD = $(builddir)/libethchain.la \
   $(GLOG_LIBS) $(GTEST_LIBS)
-tests_SOURCES = \
+tests_unit_SOURCES = \
   abi_tests.cpp
 
 rpc-stubs/ethrpcclient.h: $(srcdir)/rpc-stubs/eth.json
