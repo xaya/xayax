@@ -47,9 +47,9 @@ PKG_CHECK_MODULES([GTEST], [gmock gtest_main])
 
 AC_CONFIG_FILES([
   Makefile \
-  core/Makefile \
-  core/tests/Makefile \
   src/Makefile \
+  xayacore/Makefile \
+  xayacore/tests/Makefile \
   xayax/Makefile
 ])
 AC_OUTPUT

@@ -40,7 +40,7 @@ class Fixture (testcase.BaseChainFixture):
       top_builddir = os.getenv ("top_builddir")
       if top_builddir is None:
         top_builddir = "../.."
-      xcoreBin = os.path.join (top_builddir, "core", "xayax-core")
+      xcoreBin = os.path.join (top_builddir, "xayacore", "xayax-core")
 
     env = core.Environment (self.basedir, self.portgen,
                             self.args.xayad_binary, xcoreBin)

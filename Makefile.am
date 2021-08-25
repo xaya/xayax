@@ -1,3 +1,3 @@
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -Im4
 
-SUBDIRS = src core xayax
+SUBDIRS = src xayacore xayax
