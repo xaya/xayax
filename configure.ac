@@ -20,6 +20,10 @@ AX_CHECK_COMPILE_FLAG([-pedantic], [CXXFLAGS="${CXXFLAGS} -pedantic"])
 AX_CHECK_COMPILE_FLAG([-Wno-deprecated],
                       [CXXFLAGS="${CXXFLAGS} -Wno-deprecated"])
 
+# We need websocketpp, which does not have a pkg-config file.
+AC_CHECK_HEADER([websocketpp/client.hpp], [],
+                [AC_MSG_ERROR([Failed to find websocketpp])])
+
 # Windows defines ERROR, which requires us to tell glog to not define
 # it as abbreviated log severity (LOG(ERROR) still works, though, and
 # that is all that we actually use in the code).
@@ -44,6 +48,19 @@ AX_PKG_CHECK_MODULES([ZMQ], [], [libzmq >= 4.3.1])
 # the unit tests and the binaries.
 PKG_CHECK_MODULES([GFLAGS], [gflags])
 PKG_CHECK_MODULES([GTEST], [gmock gtest_main])
+
+# Stuff that we need for websocketpp.
+PKG_CHECK_MODULES([OPENSSL], [openssl])
+AX_BOOST_BASE([1.64.0], [], [AC_MSG_ERROR([Boost is not available])])
+# FIXME: Checking for boost_system seems to not work with the
+# macro (even though it is installed).  Thus we are for now just
+# manually adding -lboost_system to the flags.
+#AX_BOOST_SYSTEM
+WEBSOCKET_CFLAGS="${OPENSSL_CFLAGS} ${BOOST_CPPFLAGS}"
+WEBSOCKET_LIBS="${OPENSSL_LIBS} ${BOOST_LDFLAGS} ${BOOST_SYSTEM_LIB}"
+WEBSOCKET_LIBS+=" -lboost_system"
+AC_SUBST(WEBSOCKET_CFLAGS)
+AC_SUBST(WEBSOCKET_LIBS)
 
 AC_CONFIG_FILES([
   Makefile \

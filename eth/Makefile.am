@@ -13,26 +13,28 @@ CLEANFILES = $(RPC_STUBS)
 libethchain_la_CXXFLAGS = \
   -I$(top_srcdir)/src \
   $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) \
-  $(GLOG_CFLAGS)
+  $(WEBSOCKET_CFLAGS) $(GLOG_CFLAGS)
 libethchain_la_LIBADD = \
   $(top_builddir)/src/libxayax.la \
   $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) \
-  $(GLOG_LIBS)
+  $(WEBSOCKET_LIBS) $(GLOG_LIBS)
 libethchain_la_SOURCES = \
   abi.cpp \
-  ethchain.cpp
+  ethchain.cpp \
+  websocket.cpp
 noinst_HEADERS = \
   abi.hpp \
   ethchain.hpp \
+  websocket.hpp \
   $(RPC_STUBS)
 
 xayax_eth_CXXFLAGS = \
   -I$(top_srcdir)/src \
-  $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
+  $(WEBSOCKET_CFLAGS) $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
 xayax_eth_LDADD = \
   $(builddir)/libethchain.la \
   $(top_builddir)/src/libxayax.la \
-  $(GFLAGS_LIBS) $(GLOG_LIBS)
+  $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 xayax_eth_SOURCES = main.cpp
 
 check_PROGRAMS = tests-unit

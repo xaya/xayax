@@ -57,7 +57,7 @@ class Instance:
 
     self.proc = None
 
-  def start (self, ethrpc):
+  def start (self, ethrpc, ws=None):
     """
     Starts the process, waiting until its RPC interface is up.
     """
@@ -69,6 +69,8 @@ class Instance:
     self.log.info ("Starting new Xaya X process")
     args = list (self.binaryCmd)
     args.append ("--eth_rpc_url=%s" % ethrpc)
+    if ws is not None:
+      args.append ("--eth_ws_url=%s" % ws)
     args.append ("--port=%d" % self.port)
     args.append ("--zmq_address=tcp://127.0.0.1:%d" % self.zmqPort)
     args.append ("--datadir=%s" % self.datadir)
@@ -138,6 +140,7 @@ class Ganache:
 
     self.port = rpcPort
     self.rpcurl = "http://localhost:%d" % self.port
+    self.wsurl = "ws://localhost:%d" % self.port
 
     self.log.info ("Creating fresh data directory for Ganache-CLI in %s"
                     % self.datadir)
@@ -247,7 +250,7 @@ class Environment:
     """
 
     with self.ganache.run (), \
-         self.xnode.run (self.ganache.rpcurl):
+         self.xnode.run (self.ganache.rpcurl, self.ganache.wsurl):
       # TODO: Deploy Xaya contracts.
       yield self
 

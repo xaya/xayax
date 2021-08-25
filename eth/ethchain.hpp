@@ -5,7 +5,11 @@
 #ifndef XAYAX_ETH_ETHCHAIN_HPP
 #define XAYAX_ETH_ETHCHAIN_HPP
 
+#include "websocket.hpp"
+
 #include "basechain.hpp"
+
+#include <memory>
 
 namespace xayax
 {
@@ -13,7 +17,7 @@ namespace xayax
 /**
  * BaseChain connector that links to an Ethereum-like network endpoing.
  */
-class EthChain : public BaseChain
+class EthChain : public BaseChain, private WebSocketSubscriber::Callbacks
 {
 
 private:
@@ -25,9 +29,23 @@ private:
    */
   const std::string endpoint;
 
+  /**
+   * The websocket subscriber we use to get notified about new tips.  It is
+   * created if we actually have a ws endpoing.
+   */
+  std::unique_ptr<WebSocketSubscriber> sub;
+
+  void NewTip () override;
+
 public:
 
-  explicit EthChain (const std::string& ep);
+  /**
+   * Constructs a new instance.  It requires both an HTTP and a WebSocket
+   * endpoint.  The HTTP endpoint is used for normal requests, and the
+   * WebSocket for subscriptions.
+   */
+  explicit EthChain (const std::string& httpEndpoint,
+                     const std::string& wsEndpoint);
 
   void Start () override;
 

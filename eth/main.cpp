@@ -19,6 +19,8 @@ namespace
 
 DEFINE_string (eth_rpc_url, "",
                "URL for the Ethereum JSON-RPC interface");
+DEFINE_string (eth_ws_url, "",
+               "URL for the Ethereum websocket endpoint");
 
 DEFINE_string (datadir, "",
                "base data directory for the Xaya X state");
@@ -63,7 +65,7 @@ main (int argc, char* argv[])
       if (FLAGS_genesis_height == -1)
         throw std::runtime_error ("--genesis_height must be set");
 
-      xayax::EthChain base(FLAGS_eth_rpc_url);
+      xayax::EthChain base(FLAGS_eth_rpc_url, FLAGS_eth_ws_url);
       base.Start ();
 
       xayax::Controller controller(base, FLAGS_datadir);

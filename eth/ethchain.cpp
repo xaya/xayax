@@ -155,9 +155,21 @@ TryBlockRange (EthRpc& rpc, const int64_t startHeight, int64_t endHeight,
 
 /* ************************************************************************** */
 
-EthChain::EthChain (const std::string& ep)
-  : endpoint(ep)
-{}
+EthChain::EthChain (const std::string& httpEndpoint,
+                    const std::string& wsEndpoint)
+  : endpoint(httpEndpoint)
+{
+  if (wsEndpoint.empty ())
+    LOG (WARNING) << "Not using WebSocket subscriptions";
+  else
+    sub = std::make_unique<WebSocketSubscriber> (wsEndpoint);
+}
+
+void
+EthChain::NewTip ()
+{
+  TipChanged ();
+}
 
 void
 EthChain::Start ()
@@ -165,7 +177,8 @@ EthChain::Start ()
   EthRpc rpc(endpoint);
   LOG (INFO) << "Connected to " << rpc->web3_clientVersion ();
 
-  /* TODO: Set up some polling task for new blocks.  */
+  if (sub != nullptr)
+    sub->Start (*this);
 }
 
 std::vector<BlockData>
