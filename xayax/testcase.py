@@ -20,6 +20,7 @@ import random
 import shutil
 import struct
 import sys
+import time
 
 
 DEFAULT_DIR = "/tmp"
@@ -235,3 +236,56 @@ class Fixture:
 
     self.log.error ("The value of:\n%s\n\nis not equal to:\n%s" % (a, b))
     raise AssertionError ("%s != %s" % (a, b))
+
+
+class BaseChainFixture (Fixture):
+  """
+  An extended test fixture that uses a Xaya X instance linked to a given
+  base-chain environment (as used also by xayagametest).
+  """
+
+  @contextmanager
+  def environment (self):
+    with super ().environment (), \
+         self.createBaseChain () as env:
+      self.env = env
+      self.syncBlocks ()
+      yield
+
+  def createBaseChain (self):
+    """
+    Subclasses must implement this method to construct and return the
+    base-chain environment (without starting it yet).
+    """
+
+    raise AssertionError ("createBaseChain not implemented")
+
+  def generate (self, n):
+    """
+    Generates n new blocks on the underlying base chain.
+    """
+
+    return self.env.generate (n)
+
+  def syncBlocks (self):
+    """
+    Waits for the Xaya X instance to be on the same best block hash
+    as the underlying base chain.
+    """
+
+    x = jsonrpclib.ServerProxy (self.env.getXRpcUrl ())
+    while self.env.getChainTip ()[0] != x.getblockchaininfo ()["bestblockhash"]:
+      time.sleep (0.1)
+
+  def sendMove (self, name, data, *args, **kwargs):
+    """
+    Sends a move (name_register or name_update) with the given name
+    and the data given as JSON.
+    """
+
+    ns, nm = name.split ("/", 1)
+
+    if not self.env.nameExists (ns, nm):
+      self.env.register (ns, nm)
+
+    return self.env.move (ns, nm, json.dumps (data), *args, **kwargs)
