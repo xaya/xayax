@@ -13,18 +13,25 @@
 
 #include <glog/logging.h>
 
-#include <sstream>
+#include <cmath>
 #include <map>
+#include <sstream>
+#include <utility>
 
 namespace xayax
 {
 
 /* ************************************************************************** */
 
+class EthChain::EthRpc
+    : public RpcClient<EthRpcClient, jsonrpc::JSONRPC_CLIENT_V2>
+{
+public:
+  using RpcClient::RpcClient;
+};
+
 namespace
 {
-
-using EthRpc = RpcClient<EthRpcClient, jsonrpc::JSONRPC_CLIENT_V2>;
 
 /** Known chain IDs and how they map to libxayagame network strings.  */
 const std::map<int64_t, std::string> CHAIN_IDS =
@@ -33,6 +40,18 @@ const std::map<int64_t, std::string> CHAIN_IDS =
     {80001, "mumbai"},
     {1337, "ganache"},
   };
+
+/** Event signature of moves.  */
+constexpr const char* MOVE_EVENT
+    = "Move(string,string,string,uint256,uint256,address,uint256,address)";
+
+/**
+ * Decimals (precision) of the CHI token.  We could in theory extract
+ * that from the contract, but in practice it will be fixed to 8 places
+ * anyway.  Also having 8 here ensures that the value can be represented
+ * with a standard double correctly.
+ */
+constexpr int DECIMALS = 8;
 
 /**
  * Encodes a given integer as hex string.
@@ -69,13 +88,80 @@ ExtractBaseData (const Json::Value& val)
 }
 
 /**
- * Queries for a range of blocks in a given range of heights.  This method
- * may return false if some error happened, for instance a race condition
- * while doing RPC requests made something inconsistent.
+ * Extracts move data from a log event JSON.
  */
+MoveData
+ExtractMove (const Json::Value& val)
+{
+  MoveData res;
+  res.txid = val["transactionHash"].asString ();
+  res.metadata = Json::Value (Json::objectValue);
+
+  AbiDecoder dec(val["data"].asString ());
+  res.ns = dec.ReadString ();
+  res.name = dec.ReadString ();
+  res.mv = dec.ReadString ();
+
+  /* Ignore nonce and mover.  */
+  dec.ReadUint (256);
+  dec.ReadUint (160);
+
+  const int64_t amount = AbiDecoder::ParseInt (dec.ReadUint (256));
+  const std::string receiver = dec.ReadUint (160);
+
+  Json::Value out(Json::objectValue);
+  CHECK_GE (amount, 0);
+  if (amount > 0)
+    out[receiver] = static_cast<double> (amount) / std::pow (10.0, DECIMALS);
+  res.metadata["out"] = out;
+
+  return res;
+}
+
+} // anonymous namespace
+
+/* ************************************************************************** */
+
+EthChain::EthChain (const std::string& httpEndpoint,
+                    const std::string& wsEndpoint,
+                    const std::string& acc)
+  : endpoint(httpEndpoint)
+{
+  if (wsEndpoint.empty ())
+    LOG (WARNING) << "Not using WebSocket subscriptions";
+  else
+    sub = std::make_unique<WebSocketSubscriber> (wsEndpoint);
+
+  /* Convert the accounts contract to all lower-case.  This ensures that
+     it will match up with the data returned in logs in our cross-checks,
+     while it allows users to pass in the checksum'ed version.  */
+  for (const char c : acc)
+    accountsContract.push_back (std::tolower (c));
+}
+
+void
+EthChain::NewTip ()
+{
+  TipChanged ();
+}
+
+void
+EthChain::Start ()
+{
+  EthRpc rpc(endpoint);
+  LOG (INFO) << "Connected to " << rpc->web3_clientVersion ();
+
+  /* Precompute the topic for moves using the RPC server's Keccak
+     method.  We only need to do this once.  */
+  moveTopic = GetEventTopic (*rpc, MOVE_EVENT);
+
+  if (sub != nullptr)
+    sub->Start (*this);
+}
+
 bool
-TryBlockRange (EthRpc& rpc, const int64_t startHeight, int64_t endHeight,
-               std::vector<BlockData>& res)
+EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
+                         int64_t endHeight, std::vector<BlockData>& res) const
 {
   CHECK (res.empty ());
 
@@ -146,39 +232,74 @@ TryBlockRange (EthRpc& rpc, const int64_t startHeight, int64_t endHeight,
     }
   CHECK_EQ (res.back ().height, endHeight);
 
-  /* TODO: Query for move logs and splice them into the block array.  */
+  /* Query for move logs and add them into the result block range.  It is
+     possible to query for events in a height range in a single RPC call, but
+     by doing so we cannot guarantee that the resulting events match our
+     blocks perfectly in case of race conditions.  Thus we do another batch
+     call with explicit requests for each block hash.  */
+  req = jsonrpc::BatchCall ();
+  ids.clear ();
+  std::map<int, BlockData*> blkForId;
+  for (auto& blk : res)
+    {
+      Json::Value options(Json::objectValue);
+      options["blockHash"] = blk.hash;
+      options["address"] = accountsContract;
+      Json::Value topics(Json::arrayValue);
+      topics.append (moveTopic);
+      options["topics"] = topics;
+
+      Json::Value params(Json::arrayValue);
+      params.append (options);
+
+      const int id = req.addCall ("eth_getLogs", params);
+      ids.push_back (id);
+      blkForId.emplace (id, &blk);
+    }
+  resp = rpc->CallProcedures (req);
+  for (const auto id : ids)
+    {
+      BlockData& blk = *(blkForId.at (id));
+
+      Json::Value idVal(id);
+      const int err = resp.getErrorCode (idVal);
+      if (err != 0)
+        {
+          LOG (WARNING)
+              << "Error " << err << " retrieving logs for block "
+              << blk.hash << ":\n"
+              << err << resp.getErrorMessage (id);
+          return false;
+        }
+
+      const auto logs = resp.getResult (id);
+      CHECK (logs.isArray ());
+      /* eth_getLogs should return the logs already in the correct order.
+         But we sanity check that, as order of moves is important.  In theory
+         logIndex should be per-block and thus the only thing to look at,
+         but there's a bug in ganache and some discussion of perhaps making
+         the logIndex per-transaction.  Thus we check the order by
+         (transactionIndex, logIndex), which in all cases is guaranteed
+         to match the order we want (within a given block).  */
+      std::pair<int64_t, int64_t> lastIndices(-1, -1);
+      for (const auto& l : logs)
+        {
+          CHECK (l.isObject ());
+          CHECK_EQ (l["address"].asString (), accountsContract);
+          CHECK_EQ (l["topics"][0].asString (), moveTopic);
+          CHECK_EQ (l["blockHash"].asString (), blk.hash);
+          const int64_t txIndex
+              = AbiDecoder::ParseInt (l["transactionIndex"].asString ());
+          const int64_t logIndex
+              = AbiDecoder::ParseInt (l["logIndex"].asString ());
+          const auto curIndices = std::make_pair (txIndex, logIndex);
+          CHECK (curIndices > lastIndices) << "Logs misordered in result";
+          lastIndices = curIndices;
+          blk.moves.push_back (ExtractMove (l));
+        }
+    }
 
   return true;
-}
-
-} // anonymous namespace
-
-/* ************************************************************************** */
-
-EthChain::EthChain (const std::string& httpEndpoint,
-                    const std::string& wsEndpoint)
-  : endpoint(httpEndpoint)
-{
-  if (wsEndpoint.empty ())
-    LOG (WARNING) << "Not using WebSocket subscriptions";
-  else
-    sub = std::make_unique<WebSocketSubscriber> (wsEndpoint);
-}
-
-void
-EthChain::NewTip ()
-{
-  TipChanged ();
-}
-
-void
-EthChain::Start ()
-{
-  EthRpc rpc(endpoint);
-  LOG (INFO) << "Connected to " << rpc->web3_clientVersion ();
-
-  if (sub != nullptr)
-    sub->Start (*this);
 }
 
 std::vector<BlockData>

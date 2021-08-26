@@ -9,6 +9,8 @@
 #include <sstream>
 #include <string>
 
+class EthRpcClient;
+
 namespace xayax
 {
 
@@ -54,6 +56,12 @@ public:
   static int64_t ParseInt (const std::string& str);
 
 };
+
+/**
+ * Returns the topic value (as hex string) of a Solidity event with
+ * the given signature.
+ */
+std::string GetEventTopic (EthRpcClient& rpc, const std::string& signature);
 
 } // namespace xayax
 

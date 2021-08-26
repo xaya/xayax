@@ -6,6 +6,8 @@
 
 #include "rpcutils.hpp"
 
+#include "rpc-stubs/ethrpcclient.h"
+
 #include <glog/logging.h>
 
 namespace xayax
@@ -98,6 +100,12 @@ AbiDecoder::ParseInt (const std::string& str)
   CHECK_EQ (fullOut.str (), str) << "Integer overflow?";
 
   return res;
+}
+
+std::string
+GetEventTopic (EthRpcClient& rpc, const std::string& signature)
+{
+  return rpc.web3_sha3 ("0x" + Hexlify (signature));
 }
 
 } // namespace xayax

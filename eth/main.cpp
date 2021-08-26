@@ -21,6 +21,8 @@ DEFINE_string (eth_rpc_url, "",
                "URL for the Ethereum JSON-RPC interface");
 DEFINE_string (eth_ws_url, "",
                "URL for the Ethereum websocket endpoint");
+DEFINE_string (accounts_contract, "",
+               "Address of the Xaya accounts registry contract to use");
 
 DEFINE_string (datadir, "",
                "base data directory for the Xaya X state");
@@ -56,6 +58,8 @@ main (int argc, char* argv[])
     {
       if (FLAGS_eth_rpc_url.empty ())
         throw std::runtime_error ("--eth_rpc_url must be set");
+      if (FLAGS_accounts_contract.empty ())
+        throw std::runtime_error ("--accounts_contract must be set");
       if (FLAGS_port == 0)
         throw std::runtime_error ("--port must be set");
       if (FLAGS_zmq_address.empty ())
@@ -65,7 +69,8 @@ main (int argc, char* argv[])
       if (FLAGS_genesis_height == -1)
         throw std::runtime_error ("--genesis_height must be set");
 
-      xayax::EthChain base(FLAGS_eth_rpc_url, FLAGS_eth_ws_url);
+      xayax::EthChain base(FLAGS_eth_rpc_url, FLAGS_eth_ws_url,
+                           FLAGS_accounts_contract);
       base.Start ();
 
       xayax::Controller controller(base, FLAGS_datadir);

@@ -47,6 +47,12 @@ public:
     : http(ep), rpc(http, V)
   {}
 
+  T&
+  operator* ()
+  {
+    return rpc;
+  }
+
   T*
   operator-> ()
   {

@@ -22,6 +22,8 @@ class EthChain : public BaseChain, private WebSocketSubscriber::Callbacks
 
 private:
 
+  class EthRpc;
+
   /**
    * RPC endpoint for Ethereum.  We store the endpoint as string and
    * establish a new HTTP connection and RPC client for each request, so
@@ -29,11 +31,25 @@ private:
    */
   const std::string endpoint;
 
+  /** Contract address of the Xaya account registry.  */
+  std::string accountsContract;
+
+  /** The log topic (as hex string) for move events.  */
+  std::string moveTopic;
+
   /**
    * The websocket subscriber we use to get notified about new tips.  It is
    * created if we actually have a ws endpoing.
    */
   std::unique_ptr<WebSocketSubscriber> sub;
+
+  /**
+   * Queries for a range of blocks in a given range of heights.  This method
+   * may return false if some error happened, for instance a race condition
+   * while doing RPC requests made something inconsistent.
+   */
+  bool TryBlockRange (EthRpc& rpc, const int64_t startHeight, int64_t endHeight,
+                      std::vector<BlockData>& res) const;
 
   void NewTip () override;
 
@@ -45,7 +61,8 @@ public:
    * WebSocket for subscriptions.
    */
   explicit EthChain (const std::string& httpEndpoint,
-                     const std::string& wsEndpoint);
+                     const std::string& wsEndpoint,
+                     const std::string& acc);
 
   void Start () override;
 
