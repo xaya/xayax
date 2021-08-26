@@ -8,5 +8,5 @@ REGTESTS = \
   block_data.py \
   moves.py
 
-EXTRADIST = $(REGTESTS) $(TEST_LIBRARY)
+EXTRA_DIST = $(REGTESTS) $(TEST_LIBRARY)
 TESTS = $(REGTESTS)
