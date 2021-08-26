@@ -1,5 +1,6 @@
 AM_TESTS_ENVIRONMENT = \
-  PYTHONPATH=$(top_srcdir):$(PYTHONPATH)
+  PYTHONPATH=$(top_srcdir):$(PYTHONPATH) \
+  top_builddir=$(top_builddir)
 
 TEST_LIBRARY = coretest.py
 

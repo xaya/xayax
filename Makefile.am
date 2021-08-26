@@ -1,3 +1,5 @@
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS} -Im4
 
-SUBDIRS = src xayacore eth xayax
+SUBDIRS = src xayax xayacore eth
+
+EXTRA_DIST = node_modules

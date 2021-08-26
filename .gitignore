@@ -12,6 +12,8 @@ libtool
 ltmain.sh
 m4
 missing
+node_modules
+package-lock.json
 py-compile
 stamp-h1
 test-driver

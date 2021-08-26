@@ -14,12 +14,34 @@ import jsonrpclib
 from web3 import Web3
 
 from contextlib import contextmanager
+import json
 import logging
 import os
 import os.path
 import shutil
 import subprocess
 import time
+
+
+def loadJsonData (name):
+  """
+  Loads a JSON data file with the given name, assumed to be in the same
+  directory as the Python file itself.
+  """
+
+  path = os.path.dirname (os.path.abspath (__file__))
+  fileName = os.path.join (path, name)
+
+  # If we are running inside an automake job, the data files may actually
+  # be in the build directory (while the script itself is in the source).
+  # Check there as well.
+  if not os.path.exists (fileName):
+    top_builddir = os.getenv ("top_builddir")
+    if top_builddir is not None:
+      fileName = os.path.join (top_builddir, "xayax", name)
+
+  with open (fileName, "rt") as f:
+    return json.load (f)
 
 
 class Instance:
@@ -57,7 +79,7 @@ class Instance:
 
     self.proc = None
 
-  def start (self, ethrpc, ws=None):
+  def start (self, accountsContract, ethrpc, ws=None):
     """
     Starts the process, waiting until its RPC interface is up.
     """
@@ -68,6 +90,7 @@ class Instance:
 
     self.log.info ("Starting new Xaya X process")
     args = list (self.binaryCmd)
+    args.append ("--accounts_contract=%s" % accountsContract)
     args.append ("--eth_rpc_url=%s" % ethrpc)
     if ws is not None:
       args.append ("--eth_ws_url=%s" % ws)
@@ -222,13 +245,55 @@ class Ganache:
     finally:
       self.stop ()
 
+  def deployContract (self, addr, data, *args, **kwargs):
+    """
+    Deploys a contract with given JSON data (containing the ABI and
+    bytecode) to the test network.  The deployment will be done from
+    the given address.  Returned is a contract instance for
+    the newly deployed contract.
+    """
+
+    c = self.w3.eth.contract (abi=data["abi"], bytecode=data["bytecode"])
+
+    txid = c.constructor (*args, **kwargs).transact ({"from": addr})
+    self.rpc.evm_mine ()
+    tx = self.w3.eth.wait_for_transaction_receipt (txid)
+
+    return self.w3.eth.contract (abi=data["abi"], address=tx.contractAddress)
+
+  def deployXaya (self):
+    """
+    Deploys the Xaya contracts (WCHI, accounts registry and policy).
+
+    This method returns an object with the deployer address (owns all WCHI
+    and the contracts) and the deployed contract instances.
+    """
+
+    class XayaDeployment:
+      account = None
+      wchi = None
+      registry = None
+      policy = None
+
+    res = XayaDeployment ()
+    res.account = self.w3.eth.accounts[0]
+
+    res.wchi = self.deployContract (res.account, loadJsonData ("WCHI.json"))
+    res.policy = self.deployContract (
+        res.account, loadJsonData ("XayaPolicy.json"), 100_0000)
+    res.registry = self.deployContract (
+        res.account, loadJsonData ("XayaAccounts.json"),
+        res.wchi.address, res.policy.address)
+
+    return res
+
 
 class Environment:
   """
   A full test environment consisting of a local Ethereum chain
   (using ganache-cli) with the Xaya contracts deployed, and a Xaya X
   process connected to it.
-  
+
   When running, it exposes the RPC interface of the Xaya X process, which
   should be connected to the GSP, and also the RPC interface of the
   ganache-cli process (through JSON-RPC as well as Web3.py) for controlling
@@ -241,6 +306,7 @@ class Environment:
     }
     self.ganache = Ganache (basedir, next (portgen))
     self.xnode = Instance (basedir, portgen, xayaxBinary)
+    self.log = logging.getLogger ("xayax.eth")
 
   @contextmanager
   def run (self):
@@ -249,10 +315,13 @@ class Environment:
     as a context manager.
     """
 
-    with self.ganache.run (), \
-         self.xnode.run (self.ganache.rpcurl, self.ganache.wsurl):
-      # TODO: Deploy Xaya contracts.
-      yield self
+    with self.ganache.run ():
+      self.contracts = self.ganache.deployXaya ()
+      self.log.info ("WCHI contract: %s" % self.contracts.wchi.address)
+      self.log.info ("Accounts contract: %s" % self.contracts.registry.address)
+      with self.xnode.run (self.contracts.registry.address,
+                           self.ganache.rpcurl, self.ganache.wsurl):
+        yield self
 
   def createGanacheRpc (self):
     """
