@@ -23,6 +23,14 @@ import subprocess
 import time
 
 
+# Maximum uint256 value, which is used in the contract interface
+# (e.g. for approvals and the move nonce).
+maxUint256 = 2**256 - 1
+
+# Zero address.
+zeroAddr = "0x" + "00" * 20
+
+
 def loadJsonData (name):
   """
   Loads a JSON data file with the given name, assumed to be in the same
@@ -285,6 +293,13 @@ class Ganache:
         res.account, loadJsonData ("XayaAccounts.json"),
         res.wchi.address, res.policy.address)
 
+    # Approve the account registry for spending unlimited WCHI from each
+    # of our internal accounts.
+    for a in self.w3.eth.accounts:
+      res.wchi.functions.approve (res.registry.address, maxUint256)\
+          .transact ({"from": a})
+    self.rpc.evm_mine ()
+
     return res
 
 
@@ -319,6 +334,8 @@ class Environment:
       self.contracts = self.ganache.deployXaya ()
       self.log.info ("WCHI contract: %s" % self.contracts.wchi.address)
       self.log.info ("Accounts contract: %s" % self.contracts.registry.address)
+      self.ganache.w3.eth.default_account = self.contracts.account
+      self.clearRegisteredCache ()
       with self.xnode.run (self.contracts.registry.address,
                            self.ganache.rpcurl, self.ganache.wsurl):
         yield self
@@ -342,6 +359,15 @@ class Environment:
   def getGspArguments (self):
     return self.getXRpcUrl (), ["--xaya_rpc_protocol=2"]
 
+  def clearRegisteredCache (self):
+    """
+    Removes the in-memory cache for names that have been registered
+    and may be pending.  This can be used after a chain reorg to unmark
+    names as registered if their registration was actually undone.
+    """
+
+    self.registered = set ()
+
   # Methods from xaya.Environment for managing the blockchain, as
   # needed to run xayagametest instances against this as environment.
 
@@ -358,10 +384,32 @@ class Environment:
     return data["hash"].hex (), data["number"]
 
   def nameExists (self, ns, nm):
-    assert False
+    # We use an in-memory register of names that have been registered,
+    # so that we know if a registration may be pending at the moment.
+    if (ns, nm) in self.registered:
+      return True
+    return self.contracts.registry.functions.exists (ns, nm).call ()
 
-  def register (self, ns, nm):
-    assert False
+  def register (self, ns, nm, addr=None):
+    if addr is None:
+      addr = self.contracts.account
+    self.registered.add ((ns, nm))
+    return self.contracts.registry.functions.register (ns, nm)\
+              .transact ({"from": addr})
 
-  def move (self, ns, nm, strval, *args, **kwargs):
-    assert False
+  def move (self, ns, nm, strval, addr=None, send=None):
+    if addr is None:
+      addr = self.contracts.account
+
+    if send is None:
+      recipient = zeroAddr
+      amount = 0
+    else:
+      (recipient, amount) = send
+
+    # When sending a move right after registering a name (while the registration
+    # may not yet have confirmed), estimate_gas fails.  Thus we provide our
+    # own gas limit here.
+    return self.contracts.registry.functions\
+              .move (ns, nm, strval, maxUint256, amount, recipient)\
+              .transact ({"from": addr, "gas": 10**6})

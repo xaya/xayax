@@ -5,7 +5,8 @@ AM_TESTS_ENVIRONMENT = \
 TEST_LIBRARY = ethtest.py
 
 REGTESTS = \
-  block_data.py
+  block_data.py \
+  moves_data.py
 
 EXTRA_DIST = $(REGTESTS) $(TEST_LIBRARY)
 TESTS = $(REGTESTS)
