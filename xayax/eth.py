@@ -303,6 +303,35 @@ class Ganache:
     return res
 
 
+class ChainSnapshot:
+  """
+  A snapshot of the Ganache test blockchain.  It can be created from the
+  current state, and then we can always revert back to it at later points
+  in time as desired.
+
+  This is a wrapper around Ganache's evm_snapshot and evm_revert RPC methods,
+  which takes care of the underlying snapshot ID and also allows us to
+  revert back to a snapshot multiple times.
+
+  Note that reverting to a snapshot invalidates any snapshots taken after,
+  i.e. it is not possible to snapshot some tip, revert blocks, and then
+  revert back to the tip ("restore" it).
+  """
+
+  def __init__ (self, rpc):
+    self.rpc = rpc
+    self.takeSnapshot ()
+
+  def takeSnapshot (self):
+    self.id = self.rpc.evm_snapshot ()
+
+  def restore (self):
+    self.rpc.evm_revert (self.id)
+    # Ganache allows a snapshot to be used only once.  Thus take a new one
+    # now (at the same state) so we can revert again in the future.
+    self.takeSnapshot ()
+
+
 class Environment:
   """
   A full test environment consisting of a local Ethereum chain
@@ -358,6 +387,14 @@ class Environment:
 
   def getGspArguments (self):
     return self.getXRpcUrl (), ["--xaya_rpc_protocol=2"]
+
+  def snapshot (self):
+    """
+    Returns a chain snapshot that can be used to restore the current state
+    at a later time (e.g. for testing reorgs).
+    """
+
+    return ChainSnapshot (self.createGanacheRpc ())
 
   def clearRegisteredCache (self):
     """

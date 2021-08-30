@@ -237,6 +237,21 @@ class Fixture:
     self.log.error ("The value of:\n%s\n\nis not equal to:\n%s" % (a, b))
     raise AssertionError ("%s != %s" % (a, b))
 
+  def assertZmqBlocks (self, sub, typ, hashes, reqtoken=None):
+    """
+    Receives messages on the ZMQ subscriber, expecting attach/detach messages
+    (according to typ) for the given block hashes in order.
+    """
+
+    for h in hashes:
+      topic, data = sub.receive ()
+      self.assertEqual (topic, "game-block-%s" % typ)
+      self.assertEqual (data["block"]["hash"], h)
+      if reqtoken is None:
+        self.assertEqual ("reqtoken" in data, False)
+      else:
+        self.assertEqual (data["reqtoken"], reqtoken)
+
 
 class BaseChainFixture (Fixture):
   """

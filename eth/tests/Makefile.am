@@ -5,6 +5,7 @@ AM_TESTS_ENVIRONMENT = \
 TEST_LIBRARY = ethtest.py
 
 REGTESTS = \
+  attach_detach.py \
   block_data.py \
   moves_data.py
 
