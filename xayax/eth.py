@@ -53,6 +53,16 @@ def loadJsonData (name):
     return json.load (f)
 
 
+def uintToXaya (value):
+  """
+  Converts a hex literal for an uint256 from Ethereum format
+  (with 0x prefix) to the Xaya format without.
+  """
+
+  assert value[:2] == "0x"
+  return value[2:]
+
+
 class Instance:
   """
   An instance of the Xaya-X-on-Ethereum process.  The "run" method
@@ -437,7 +447,7 @@ class Environment:
 
   def getChainTip (self):
     data = self.ganache.w3.eth.get_block ("latest")
-    return data["hash"].hex (), data["number"]
+    return uintToXaya (data["hash"].hex ()), data["number"]
 
   def nameExists (self, ns, nm):
     # We use an in-memory register of names that have been registered,

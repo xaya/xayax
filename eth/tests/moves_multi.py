@@ -12,6 +12,7 @@ transaction (with a custom contract).
 
 import ethtest
 
+from xayax.eth import uintToXaya
 from xayax.testcase import ZmqSubscriber
 
 import json
@@ -95,31 +96,31 @@ if __name__ == "__main__":
 
       f.assertEqual (data["admin"], [
         {
-          "txid": ids[1].hex (),
+          "txid": uintToXaya (ids[1].hex ()),
           "cmd": 1,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[3].hex (),
+          "txid": uintToXaya (ids[3].hex ()),
           "cmd": 2,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[4].hex (),
+          "txid": uintToXaya (ids[4].hex ()),
           "cmd": 3,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[4].hex (),
+          "txid": uintToXaya (ids[4].hex ()),
           "cmd": 4,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[6].hex (),
+          "txid": uintToXaya (ids[6].hex ()),
           "cmd": 100,
           "burnt": 0,
           "out": {},
@@ -127,49 +128,49 @@ if __name__ == "__main__":
       ])
       f.assertEqual (data["moves"], [
         {
-          "txid": ids[0].hex (),
+          "txid": uintToXaya (ids[0].hex ()),
           "name": "domob",
           "move": 1,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[2].hex (),
+          "txid": uintToXaya (ids[2].hex ()),
           "name": "game",
           "move": 2,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[2].hex (),
+          "txid": uintToXaya (ids[2].hex ()),
           "name": "game",
           "move": 3,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[2].hex (),
+          "txid": uintToXaya (ids[2].hex ()),
           "name": "domob",
           "move": 2,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[2].hex (),
+          "txid": uintToXaya (ids[2].hex ()),
           "name": "domob",
           "move": 3,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[3].hex (),
+          "txid": uintToXaya (ids[3].hex ()),
           "name": "game",
           "move": 4,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": ids[5].hex (),
+          "txid": uintToXaya (ids[5].hex ()),
           "name": "domob",
           "move": 42,
           "burnt": 0,

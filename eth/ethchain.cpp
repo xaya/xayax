@@ -65,6 +65,17 @@ EncodeHexInt (const int64_t val)
 }
 
 /**
+ * Converts a uint256 hash with 0x prefix as from the Ethereum RPC
+ * interface to one without prefix as libxayagame expects them.
+ */
+std::string
+ConvertUint256 (const std::string& withPrefix)
+{
+  CHECK_EQ (withPrefix.substr (0, 2), "0x");
+  return withPrefix.substr (2);
+}
+
+/**
  * Extracts the base data of a block (without moves) from the
  * eth_getBlockByNumber JSON result.
  */
@@ -74,8 +85,8 @@ ExtractBaseData (const Json::Value& val)
   CHECK (val.isObject ());
 
   BlockData res;
-  res.hash = val["hash"].asString ();
-  res.parent = val["parentHash"].asString ();
+  res.hash = ConvertUint256 (val["hash"].asString ());
+  res.parent = ConvertUint256 (val["parentHash"].asString ());
   res.height = AbiDecoder::ParseInt (val["number"].asString ());
   /* FIXME: Determine proper value for rngseed.  */
   res.rngseed = res.hash;
@@ -94,7 +105,7 @@ MoveData
 ExtractMove (const Json::Value& val)
 {
   MoveData res;
-  res.txid = val["transactionHash"].asString ();
+  res.txid = ConvertUint256 (val["transactionHash"].asString ());
   res.metadata = Json::Value (Json::objectValue);
 
   AbiDecoder dec(val["data"].asString ());
@@ -243,7 +254,7 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
   for (auto& blk : res)
     {
       Json::Value options(Json::objectValue);
-      options["blockHash"] = blk.hash;
+      options["blockHash"] = "0x" + blk.hash;
       options["address"] = accountsContract;
       Json::Value topics(Json::arrayValue);
       topics.append (moveTopic);
@@ -287,7 +298,7 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
           CHECK (l.isObject ());
           CHECK_EQ (l["address"].asString (), accountsContract);
           CHECK_EQ (l["topics"][0].asString (), moveTopic);
-          CHECK_EQ (l["blockHash"].asString (), blk.hash);
+          CHECK_EQ (ConvertUint256 (l["blockHash"].asString ()), blk.hash);
           const int64_t txIndex
               = AbiDecoder::ParseInt (l["transactionIndex"].asString ());
           const int64_t logIndex

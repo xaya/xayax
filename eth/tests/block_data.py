@@ -11,6 +11,7 @@ Tests basic metadata associated with blocks.
 
 import ethtest
 
+from xayax.eth import uintToXaya
 from xayax.testcase import ZmqSubscriber
 
 
@@ -24,13 +25,13 @@ if __name__ == "__main__":
     with sub.run ():
       [blkHash] = f.generate (1)
       blk = f.w3.eth.get_block ("latest")
-      f.assertEqual (blk["hash"].hex (), blkHash)
+      f.assertEqual (uintToXaya (blk["hash"].hex ()), blkHash)
       _, data = sub.receive ()
 
       f.assertEqual (data, {
         "block": {
           "hash": blkHash,
-          "parent": blk["parentHash"].hex (),
+          "parent": uintToXaya (blk["parentHash"].hex ()),
           "height": blk["number"],
           "timestamp": blk["timestamp"],
           "rngseed": blkHash,

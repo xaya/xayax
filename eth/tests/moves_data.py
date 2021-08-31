@@ -12,6 +12,7 @@ and returned with the expected data.
 
 import ethtest
 
+from xayax.eth import uintToXaya
 from xayax.testcase import ZmqSubscriber
 
 
@@ -49,7 +50,7 @@ if __name__ == "__main__":
       f.assertEqual (data, {
         "admin": [
           {
-            "txid": txid2.hex (),
+            "txid": uintToXaya (txid2.hex ()),
             "cmd": "admin",
             "burnt": 0,
             "out": {addr1.lower (): 0.12345678},
@@ -57,14 +58,14 @@ if __name__ == "__main__":
         ],
         "moves": [
           {
-            "txid": txid1.hex (),
+            "txid": uintToXaya (txid1.hex ()),
             "name": "domob",
             "move": [1, 2, 3],
             "burnt": 0,
             "out": {},
           },
           {
-            "txid": txid3.hex (),
+            "txid": uintToXaya (txid3.hex ()),
             "name": "andy",
             "move": {},
             "burnt": 0,
