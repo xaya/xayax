@@ -209,9 +209,18 @@ class Ganache:
     # we set a very long block interval, which will be so long that no blocks
     # get actually mined automatically.  Tests can mine on demand instead.
     args.extend (["-b", str (1_000_000)])
+    # Use a timestamp "early" into Xaya history.  This ensures that the
+    # genesis block will be before anything programmed into a particular
+    # game, as would be the case with a real network.
+    args.extend (["-t", "2018-01-01Z00:00:00"])
     self.logFile = open (os.path.join (self.datadir, "ganache.log"), "wt")
     self.proc = subprocess.Popen (args, stderr=subprocess.STDOUT,
                                   stdout=self.logFile)
+
+    # The Ganache wrapper has an optional mock time, which can be set
+    # from the outside and which (if set) is used as argument to evm_mine
+    # to determine the next block's timestamp.
+    self.mockTime = None
 
     self.rpc = self.createRpc ()
     self.log.info ("Waiting for the JSON-RPC server to be up...")
@@ -264,6 +273,16 @@ class Ganache:
     finally:
       self.stop ()
 
+  def mine (self):
+    """
+    Mines a block, taking mock time into account (if set).
+    """
+
+    if self.mockTime is None:
+      self.rpc.evm_mine ()
+    else:
+      self.rpc.evm_mine (self.mockTime)
+
   def deployContract (self, addr, data, *args, **kwargs):
     """
     Deploys a contract with given JSON data (containing the ABI and
@@ -282,7 +301,7 @@ class Ganache:
     c = self.w3.eth.contract (abi=data["abi"], bytecode=code)
 
     txid = c.constructor (*args, **kwargs).transact ({"from": addr})
-    self.rpc.evm_mine ()
+    self.mine ()
     tx = self.w3.eth.wait_for_transaction_receipt (txid)
 
     return self.w3.eth.contract (abi=data["abi"], address=tx.contractAddress)
@@ -327,7 +346,7 @@ class Ganache:
     for a in self.w3.eth.accounts:
       res.wchi.functions.approve (res.registry.address, maxUint256)\
           .transact ({"from": a})
-    self.rpc.evm_mine ()
+    self.mine ()
 
     return res
 
@@ -425,6 +444,15 @@ class Environment:
 
     return ChainSnapshot (self.createGanacheRpc ())
 
+  def setMockTime (self, timestamp):
+    """
+    Sets the mock time, which is the timestamp that any blocks mined
+    in the future will use.
+    """
+
+    self.log.info ("Setting mocktime for Ganache to %d" % timestamp)
+    self.ganache.mockTime = timestamp
+
   def clearRegisteredCache (self):
     """
     Removes the in-memory cache for names that have been registered
@@ -440,7 +468,7 @@ class Environment:
   def generate (self, num):
     blks = []
     while len (blks) < num:
-      self.ganache.rpc.evm_mine ()
+      self.ganache.mine ()
       blk, _ = self.getChainTip ()
       blks.append (blk)
     return blks
