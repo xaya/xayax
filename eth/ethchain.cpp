@@ -170,6 +170,19 @@ EthChain::Start ()
     sub->Start (*this);
 }
 
+Json::Value
+EthChain::GetLogsOptions () const
+{
+  Json::Value res(Json::objectValue);
+  res["address"] = accountsContract;
+
+  Json::Value topics(Json::arrayValue);
+  topics.append (moveTopic);
+  res["topics"] = topics;
+
+  return res;
+}
+
 bool
 EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
                          int64_t endHeight, std::vector<BlockData>& res) const
@@ -248,18 +261,77 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
      by doing so we cannot guarantee that the resulting events match our
      blocks perfectly in case of race conditions.  Thus we do another batch
      call with explicit requests for each block hash.  */
-  req = jsonrpc::BatchCall ();
-  ids.clear ();
-  std::map<int, BlockData*> blkForId;
-  for (auto& blk : res)
-    {
-      Json::Value options(Json::objectValue);
-      options["blockHash"] = "0x" + blk.hash;
-      options["address"] = accountsContract;
-      Json::Value topics(Json::arrayValue);
-      topics.append (moveTopic);
-      options["topics"] = topics;
+  return AddMovesOneByOne (rpc, res);
+}
 
+/**
+ * Helper class for extracting move data from an eth_getLogs response
+ * and adding them to a given block.  We require moves to be ordered,
+ * and this class also keeps track of the logIndex/transactionIndex for
+ * each event and asserts that they are always increasing.
+ */
+class EthChain::BlockMoveExtractor
+{
+
+private:
+
+  /** The parent EthChain instance.  */
+  const EthChain& parent;
+
+  /** The block being extended with moves.  */
+  BlockData& blk;
+
+  /**
+   * The transactionIndex/logIndex pair we extracted last, which should
+   * always increase as a tuple.  Note that in theory logIndex alone should
+   * be per-block, but there is a bug in Ganache and some discussions of
+   * changing this to be per-transaction.  By comparing the full pair, we
+   * ensure that it works correctly in any of these cases.
+   */
+  std::pair<int64_t, int64_t> lastIndices;
+
+public:
+
+  explicit BlockMoveExtractor (const EthChain& p, BlockData& b)
+    : parent(p), blk(b), lastIndices(-1, -1)
+  {}
+
+  /**
+   * Extracts data from a given eth_getLogs result entry, adding it
+   * as a new move to the block we are working on.
+   */
+  void
+  ProcessLogEntry (const Json::Value& log)
+  {
+    CHECK (log.isObject ());
+
+    CHECK_EQ (log["address"].asString (), parent.accountsContract);
+    CHECK_EQ (log["topics"][0].asString (), parent.moveTopic);
+    CHECK_EQ (ConvertUint256 (log["blockHash"].asString ()), blk.hash);
+
+    const int64_t txIndex
+        = AbiDecoder::ParseInt (log["transactionIndex"].asString ());
+    const int64_t logIndex
+        = AbiDecoder::ParseInt (log["logIndex"].asString ());
+    const auto curIndices = std::make_pair (txIndex, logIndex);
+    CHECK (curIndices > lastIndices) << "Logs misordered in result";
+
+    lastIndices = curIndices;
+    blk.moves.push_back (ExtractMove (log));
+  }
+
+};
+
+bool
+EthChain::AddMovesOneByOne (EthRpc& rpc, std::vector<BlockData>& blocks) const
+{
+  jsonrpc::BatchCall req;
+  std::vector<int> ids;
+  std::map<int, BlockData*> blkForId;
+  for (auto& blk : blocks)
+    {
+      auto options = GetLogsOptions ();
+      options["blockHash"] = "0x" + blk.hash;
       Json::Value params(Json::arrayValue);
       params.append (options);
 
@@ -267,10 +339,12 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
       ids.push_back (id);
       blkForId.emplace (id, &blk);
     }
-  resp = rpc->CallProcedures (req);
+
+  jsonrpc::BatchResponse resp = rpc->CallProcedures (req);
   for (const auto id : ids)
     {
       BlockData& blk = *(blkForId.at (id));
+      BlockMoveExtractor extractor(*this, blk);
 
       Json::Value idVal(id);
       const int err = resp.getErrorCode (idVal);
@@ -285,29 +359,8 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
 
       const auto logs = resp.getResult (id);
       CHECK (logs.isArray ());
-      /* eth_getLogs should return the logs already in the correct order.
-         But we sanity check that, as order of moves is important.  In theory
-         logIndex should be per-block and thus the only thing to look at,
-         but there's a bug in ganache and some discussion of perhaps making
-         the logIndex per-transaction.  Thus we check the order by
-         (transactionIndex, logIndex), which in all cases is guaranteed
-         to match the order we want (within a given block).  */
-      std::pair<int64_t, int64_t> lastIndices(-1, -1);
       for (const auto& l : logs)
-        {
-          CHECK (l.isObject ());
-          CHECK_EQ (l["address"].asString (), accountsContract);
-          CHECK_EQ (l["topics"][0].asString (), moveTopic);
-          CHECK_EQ (ConvertUint256 (l["blockHash"].asString ()), blk.hash);
-          const int64_t txIndex
-              = AbiDecoder::ParseInt (l["transactionIndex"].asString ());
-          const int64_t logIndex
-              = AbiDecoder::ParseInt (l["logIndex"].asString ());
-          const auto curIndices = std::make_pair (txIndex, logIndex);
-          CHECK (curIndices > lastIndices) << "Logs misordered in result";
-          lastIndices = curIndices;
-          blk.moves.push_back (ExtractMove (l));
-        }
+        extractor.ProcessLogEntry (l);
     }
 
   return true;

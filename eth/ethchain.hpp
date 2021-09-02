@@ -22,6 +22,7 @@ class EthChain : public BaseChain, private WebSocketSubscriber::Callbacks
 
 private:
 
+  class BlockMoveExtractor;
   class EthRpc;
 
   /**
@@ -42,6 +43,21 @@ private:
    * created if we actually have a ws endpoing.
    */
   std::unique_ptr<WebSocketSubscriber> sub;
+
+  /**
+   * Fills in basic options for an eth_getLogs call requesting move events
+   * from the Ethereum side.  It does not yet fill in the block filter
+   * (heights or blockHash).
+   */
+  Json::Value GetLogsOptions () const;
+
+  /**
+   * Requests move logs for a given list of blocks one-by-one (based on the
+   * hashes of the blocks in question) and adds them into the block data.
+   * Returns false if something failed, like a block was reorged and the logs
+   * are not available anymore.
+   */
+  bool AddMovesOneByOne (EthRpc& rpc, std::vector<BlockData>& blocks) const;
 
   /**
    * Queries for a range of blocks in a given range of heights.  This method
