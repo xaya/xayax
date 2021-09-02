@@ -11,6 +11,7 @@
 
 #include <jsonrpccpp/client.h>
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <cmath>
@@ -20,6 +21,10 @@
 
 namespace xayax
 {
+
+DEFINE_int32 (ethchain_fast_logs_depth, 1'024,
+              "use faster log retrieval for blocks buried this far in the"
+              " blockchain (they should never get reorged again)");
 
 /* ************************************************************************** */
 
@@ -256,11 +261,18 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
     }
   CHECK_EQ (res.back ().height, endHeight);
 
-  /* Query for move logs and add them into the result block range.  It is
-     possible to query for events in a height range in a single RPC call, but
-     by doing so we cannot guarantee that the resulting events match our
-     blocks perfectly in case of race conditions.  Thus we do another batch
-     call with explicit requests for each block hash.  */
+  /* Add in the move data from logs.  There are two methods to do this:
+     The safe way is to query for move logs for each block by hash individually,
+     and the fast is to query for all logs in a given height range.  The latter
+     is susceptible to (potentially undetectable) race conditions in case
+     of a reorg, so we only want to use it if the end height is already
+     far behind the current tip, i.e. for the bulk of syncing.  */
+  if (endHeight + FLAGS_ethchain_fast_logs_depth < tipHeight)
+    {
+      AddMovesFromHeightRange (rpc, res);
+      return true;
+    }
+
   return AddMovesOneByOne (rpc, res);
 }
 
@@ -364,6 +376,42 @@ EthChain::AddMovesOneByOne (EthRpc& rpc, std::vector<BlockData>& blocks) const
     }
 
   return true;
+}
+
+void
+EthChain::AddMovesFromHeightRange (EthRpc& rpc,
+                                   std::vector<BlockData>& blocks) const
+{
+  std::map<std::string, std::unique_ptr<BlockMoveExtractor>> extForHash;
+  int64_t lastHeight = -1;
+  for (auto& blk : blocks)
+    {
+      if (lastHeight != -1)
+        CHECK_EQ (blk.height, lastHeight + 1);
+      lastHeight = blk.height;
+
+      auto extractor = std::make_unique<BlockMoveExtractor> (*this, blk);
+      extForHash.emplace (blk.hash, std::move (extractor));
+    }
+
+  const auto startHeight = blocks.front ().height;
+  const auto endHeight = blocks.back ().height;
+
+  auto options = GetLogsOptions ();
+  options["fromBlock"] = EncodeHexInt (startHeight);
+  options["toBlock"] = EncodeHexInt (endHeight);
+  const auto logs = rpc->eth_getLogs (options);
+
+  CHECK (logs.isArray ());
+  for (const auto& l : logs)
+    {
+      const std::string hash = ConvertUint256 (l["blockHash"].asString ());
+      const auto mit = extForHash.find (hash);
+      CHECK (mit != extForHash.end ())
+          << "Events returned for block " << hash
+          << ", which is not part of the original block range";
+      mit->second->ProcessLogEntry (l);
+    }
 }
 
 std::vector<BlockData>

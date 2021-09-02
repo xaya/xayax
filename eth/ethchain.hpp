@@ -60,6 +60,15 @@ private:
   bool AddMovesOneByOne (EthRpc& rpc, std::vector<BlockData>& blocks) const;
 
   /**
+   * Requests move logs from Ethereum based on a range of block heights,
+   * and adds them into the block data.  This is insecure for blocks that
+   * may get reorged away but more efficient than AddMovesOneByOne.  It can
+   * be used for very old blocks during syncing.
+   */
+  void AddMovesFromHeightRange (EthRpc& rpc,
+                                std::vector<BlockData>& blocks) const;
+
+  /**
    * Queries for a range of blocks in a given range of heights.  This method
    * may return false if some error happened, for instance a race condition
    * while doing RPC requests made something inconsistent.
