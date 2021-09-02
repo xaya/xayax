@@ -43,10 +43,10 @@ AX_PKG_CHECK_MODULES([UNIVALUE], [], [libunivalue])
 # We use the recv variant taking message_t& over deprecated older functions,
 # which requires at least version 4.3.1.
 AX_PKG_CHECK_MODULES([ZMQ], [], [libzmq >= 4.3.1])
+AX_PKG_CHECK_MODULES([GFLAGS], [], [gflags])
 
 # Private dependencies that are not needed for the library, but only for
 # the unit tests and the binaries.
-PKG_CHECK_MODULES([GFLAGS], [gflags])
 PKG_CHECK_MODULES([GTEST], [gmock gtest_main])
 
 # Stuff that we need for websocketpp.

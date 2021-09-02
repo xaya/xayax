@@ -4,6 +4,7 @@
 
 #include "private/sync.hpp"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <algorithm>
@@ -11,6 +12,9 @@
 
 namespace xayax
 {
+
+DEFINE_int32 (xayax_block_range, 128,
+              "maximum number of blocks to process at once");
 
 namespace
 {
@@ -24,9 +28,6 @@ constexpr auto UPDATE_TIMEOUT = std::chrono::seconds (5);
  * and processing completely for a long time.
  */
 constexpr auto WAIT_BETWEEN_STEPS = std::chrono::milliseconds (1);
-
-/** Maximum number of blocks to request at once during sync.  */
-constexpr unsigned MAX_NUM_BLOCKS = 128;
 
 } // anonymous namespace
 
@@ -100,7 +101,8 @@ Sync::SetCallbacks (Callbacks* c)
 void
 Sync::IncreaseNumBlocks ()
 {
-  numBlocks = std::min (MAX_NUM_BLOCKS, numBlocks << 1);
+  CHECK_GE (FLAGS_xayax_block_range, 1) << "Invalid --xayax_block_range set";
+  numBlocks = std::min<unsigned> (FLAGS_xayax_block_range, numBlocks << 1);
 }
 
 bool

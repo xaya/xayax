@@ -14,6 +14,7 @@
 #include <jsonrpccpp/server.h>
 #include <jsonrpccpp/server/connectors/httpserver.h>
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <experimental/filesystem>
@@ -24,13 +25,12 @@
 namespace xayax
 {
 
+DECLARE_int32 (xayax_block_range);
+
 namespace
 {
 
 namespace fs = std::experimental::filesystem;
-
-/** Maximum number of attaches sent for a game_sendupdates.  */
-constexpr unsigned MAX_BLOCK_ATTACHES = 128;
 
 } // anonymous namespace
 
@@ -272,7 +272,7 @@ Controller::RpcServer::game_sendupdates (const std::string& from,
   std::vector<BlockData> detaches, attaches;
   {
     std::lock_guard<std::mutex> lock(run.mutChain);
-    run.PushZmqBlocks (from, {}, MAX_BLOCK_ATTACHES, reqtoken.str (),
+    run.PushZmqBlocks (from, {}, FLAGS_xayax_block_range, reqtoken.str (),
                        detaches, attaches);
   }
 
