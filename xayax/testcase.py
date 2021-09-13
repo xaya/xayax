@@ -50,6 +50,8 @@ class ZmqSubscriber:
       else:
         assert self.addr == notification["address"]
 
+    self.allowExtraMessages = False
+
   def subscribe (self, prefix):
     """
     Sets a prefix to which we want to subscribe when running.
@@ -77,7 +79,9 @@ class ZmqSubscriber:
 
     yield self
 
-    self.assertNoMessage ()
+    if not self.allowExtraMessages:
+      self.assertNoMessage ()
+
     self.socket.close ()
 
   def receive (self):

@@ -9,6 +9,11 @@
 
 #include <memory>
 
+namespace zmq
+{
+  class context_t;
+} // namespace zmq
+
 namespace xayax
 {
 
@@ -22,7 +27,8 @@ class CoreChain : public BaseChain
 
 private:
 
-  class ZmqListener;
+  class ZmqBlockListener;
+  class ZmqTxListener;
 
   /**
    * RPC endpoint for Xaya Core.  We store the endpoint as string and
@@ -31,8 +37,13 @@ private:
    */
   const std::string endpoint;
 
+  /** ZMQ context used to listen to Xaya Core.  */
+  std::unique_ptr<zmq::context_t> zmqCtx;
+
   /** ZMQ listener for tip updates on Xaya Core.  */
-  std::unique_ptr<ZmqListener> listener;
+  std::unique_ptr<ZmqBlockListener> blockListener;
+  /** ZMQ listener for pending moves.  */
+  std::unique_ptr<ZmqTxListener> txListener;
 
 public:
 

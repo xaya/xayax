@@ -159,25 +159,17 @@ ConstructBlockData (const Json::Value& data)
 
 using CoreRpc = RpcClient<CoreRpcClient, jsonrpc::JSONRPC_CLIENT_V1>;
 
-} // anonymous namespace
-
-/* ************************************************************************** */
-
 /**
- * Simple ZMQ listener class for the Xaya Core -zmqpubhashblock endpoint,
- * which just notifies the BaseChain about a new tip to request every time
- * a notification is received.
+ * Generic ZMQ listener class that runs a receive loop and reads
+ * messages from Xaya Core.
  */
-class CoreChain::ZmqListener
+class GenericZmqListener
 {
 
 private:
 
-  /** Parent instance that gets notified about blocks.  */
-  CoreChain& parent;
-
-  /** ZMQ context for this listener.  */
-  zmq::context_t ctx;
+  /** The topic string this is for.  */
+  const std::string topic;
 
   /** ZMQ socket for this listener.  */
   zmq::socket_t sock;
@@ -204,20 +196,34 @@ private:
             continue;
           }
 
-        /* We don't care about the actual message body.  We just take the
-           signal of a message being received as a hint that there may be a
-           new tip to request.  */
-        while (sock.get (zmq::sockopt::rcvmore))
-          {
-            /* Multipart messages are delivered atomically.  As long as
-               there are more parts, they are guaranteed to be available
-               now as well.  */
-            CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
-          }
+        CHECK_EQ (msg.to_string (), topic);
 
-        parent.TipChanged ();
+        /* Multipart messages are delivered atomically.  As long as
+           there are more parts, they are guaranteed to be available
+           now as well.  */
+        CHECK (sock.get (zmq::sockopt::rcvmore));
+        CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
+        const std::string payload = msg.to_string ();
+
+        /* Ignore the sequence number.  */
+        CHECK (sock.get (zmq::sockopt::rcvmore));
+        CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
+        CHECK_EQ (msg.size (), 4);
+        CHECK (!sock.get (zmq::sockopt::rcvmore));
+
+        HandleMessage (payload);
       }
   }
+
+protected:
+
+  /** Parent instance that subclasses notify about updates.  */
+  CoreChain& parent;
+
+  /**
+   * Handles a particular message payload.
+   */
+  virtual void HandleMessage (const std::string& payload) = 0;
 
 public:
 
@@ -225,11 +231,12 @@ public:
    * Constructs the listener, connecting it already to the given address
    * and starting the receiver thread.
    */
-  explicit ZmqListener (CoreChain& p, const std::string& addr)
-    : parent(p), sock(ctx, ZMQ_SUB), shouldStop(false)
+  explicit GenericZmqListener (CoreChain& p, zmq::context_t& ctx,
+                               const std::string& t, const std::string& addr)
+    : topic(t), sock(ctx, ZMQ_SUB), shouldStop(false), parent(p)
   {
     sock.connect (addr);
-    sock.set (zmq::sockopt::subscribe, "hashblock");
+    sock.set (zmq::sockopt::subscribe, topic);
     receiver = std::make_unique<std::thread> ([this] ()
       {
         ReceiveLoop ();
@@ -239,7 +246,7 @@ public:
   /**
    * Destructs and stops the listener.
    */
-  ~ZmqListener ()
+  virtual ~GenericZmqListener ()
   {
     CHECK (receiver != nullptr);
     shouldStop = true;
@@ -250,10 +257,76 @@ public:
 
 };
 
+} // anonymous namespace
+
+/* ************************************************************************** */
+
+/**
+ * Simple ZMQ listener class for the Xaya Core -zmqpubhashblock endpoint,
+ * which just notifies the BaseChain about a new tip to request every time
+ * a notification is received.
+ */
+class CoreChain::ZmqBlockListener : public GenericZmqListener
+{
+
+protected:
+
+  void
+  HandleMessage (const std::string& payload) override
+  {
+    parent.TipChanged ();
+  }
+
+public:
+
+  explicit ZmqBlockListener (CoreChain& p, zmq::context_t& ctx,
+                             const std::string& addr)
+    : GenericZmqListener(p, ctx, "hashblock", addr)
+  {}
+
+};
+
+/**
+ * Simple ZMQ listener class for the Xaya Core -zmqpubrawtx endpoint,
+ * which notifies the BaseChain about new pending moves detected.
+ */
+class CoreChain::ZmqTxListener : public GenericZmqListener
+{
+
+private:
+
+  /**
+   * The RPC connection used from the message handler.  This will only
+   * be used from the receiver thread, so it is fine to have one instance
+   * here that is shared between calls.
+   */
+  CoreRpc rpc;
+
+protected:
+
+  void
+  HandleMessage (const std::string& payload) override
+  {
+    const auto tx = rpc->decoderawtransaction (Hexlify (payload));
+    MoveData mv;
+    if (GetMoveFromTx (tx, mv))
+      parent.PendingMoves ({mv});
+  }
+
+public:
+
+  explicit ZmqTxListener (CoreChain& p, zmq::context_t& ctx,
+                          const std::string& addr)
+    : GenericZmqListener(p, ctx, "rawtx", addr),
+      rpc(parent.endpoint)
+  {}
+
+};
+
 /* ************************************************************************** */
 
 CoreChain::CoreChain (const std::string& ep)
-  : endpoint(ep)
+  : endpoint(ep), zmqCtx(new zmq::context_t ())
 {}
 
 CoreChain::~CoreChain () = default;
@@ -275,29 +348,42 @@ CoreChain::Start ()
   const auto notifications = rpc->getzmqnotifications ();
   CHECK (notifications.isArray ());
 
-  std::string addr;
+  std::string addrBlock;
+  std::string addrTx;
   for (const auto& n : notifications)
     {
       CHECK (n.isObject ());
-      if (n["type"].asString () == "pubhashblock")
-        {
-          addr = n["address"].asString ();
-          break;
-        }
+      const std::string type = n["type"].asString ();
+      if (type == "pubhashblock")
+        addrBlock = n["address"].asString ();
+      else if (type == "pubrawtx")
+        addrTx = n["address"].asString ();
     }
 
-  if (addr.empty ())
+  if (addrBlock.empty ())
+    LOG (WARNING)
+        << "Xaya Core has no -zmqpubhashblock notifier,"
+        << " relying on periodic polling only";
+  else
     {
-      LOG (WARNING)
-          << "Xaya Core has no -zmqpubhashblock notifier,"
-          << " relying on periodic polling only";
-      return;
+      LOG (INFO)
+          << "Using -zmqpubhashblock notifier at " << addrBlock
+          << " for receiving tip updates from Xaya Core";
+      blockListener
+          = std::make_unique<ZmqBlockListener> (*this, *zmqCtx, addrBlock);
     }
 
-  LOG (INFO)
-      << "Using -zmqpubhashblock notifier at " << addr
-      << " for receiving tip updates from Xaya Core";
-  listener = std::make_unique<ZmqListener> (*this, addr);
+  if (addrTx.empty ())
+    LOG (WARNING)
+        << "Xaya COre has no -zmqpubrawtx notifier,"
+        << " pending moves will not be detected";
+  else
+    {
+      LOG (INFO)
+          << "Using -zmqpubrawtx notifier at " << addrTx
+          << " for pending moves from Xaya Core";
+      txListener = std::make_unique<ZmqTxListener> (*this, *zmqCtx, addrTx);
+    }
 }
 
 std::vector<BlockData>
@@ -361,8 +447,16 @@ CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
 std::vector<std::string>
 CoreChain::GetMempool ()
 {
-  /* FIXME: Implement this for real.  */
-  return {};
+  CoreRpc rpc(endpoint);
+
+  const auto mempool = rpc->getrawmempool ();
+  CHECK (mempool.isArray ());
+
+  std::vector<std::string> res;
+  for (const auto& txid : mempool)
+    res.push_back (txid.asString ());
+
+  return res;
 }
 
 std::string

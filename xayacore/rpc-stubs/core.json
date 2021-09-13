@@ -32,6 +32,14 @@
     "returns": {}
   },
   {
+    "name": "decoderawtransaction",
+    "params":
+      {
+        "hexstring": "txhex"
+      },
+    "returns": {}
+  },
+  {
     "name": "verifymessage",
     "params":
       {

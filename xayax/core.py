@@ -131,8 +131,10 @@ class Environment:
   """
 
   def __init__ (self, basedir, portgen, coreBinary, xayaxBinary):
+    zmqPort = next (portgen)
     zmqPorts = {
-      "hashblock": next (portgen),
+      "hashblock": zmqPort,
+      "rawtx": zmqPort,
     }
     self.env = xaya.Environment (basedir, next (portgen), zmqPorts,
                                  coreBinary)

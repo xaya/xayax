@@ -7,7 +7,8 @@ TEST_LIBRARY = coretest.py
 REGTESTS = \
   attach_detach.py \
   block_data.py \
-  moves.py
+  moves.py \
+  pending.py
 
 EXTRA_DIST = $(REGTESTS) $(TEST_LIBRARY)
 TESTS = $(REGTESTS)
