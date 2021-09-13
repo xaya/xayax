@@ -83,6 +83,15 @@ protected:
   }
 
   /**
+   * Builds up the topic for a pending-move message.
+   */
+  static std::string
+  Pending (const std::string& gameId)
+  {
+    return "game-pending-move json " + gameId;
+  }
+
+  /**
    * Builds up a move-data instance from the given data.
    */
   static MoveData
@@ -492,6 +501,68 @@ TEST_F (ZmqPubTests, TrackedGames)
           ],
         "moves": []
       }
+    )")
+  ));
+}
+
+TEST_F (ZmqPubTests, PendingMoves)
+{
+  const auto mv1 = Move ("p", "domob", "txid", R"(
+    {
+      "cmd": "ignored",
+      "g":
+        {
+          "foo": 42,
+          "bar": []
+        }
+    }
+  )");
+  const auto mv2 = Move ("p", "andy", "txid", R"(
+    {
+      "g":
+        {
+          "foo": -42,
+          "baz": "test"
+        }
+    }
+  )");
+
+  pub.SendPendingMoves ({mv1, mv2});
+  /* No games are tracked so far.  */
+
+  pub.TrackGame ("foo");
+  pub.TrackGame ("bar");
+  pub.SendPendingMoves ({mv1, mv2});
+
+  EXPECT_THAT (sub.AwaitMessages (Pending ("foo"), 1), ElementsAre (
+    ParseJson (R"(
+      [
+        {
+          "txid": "txid",
+          "name": "domob",
+          "move": 42,
+          "burnt": 0
+        },
+        {
+          "txid": "txid",
+          "name": "andy",
+          "move": -42,
+          "burnt": 0
+        }
+      ]
+    )")
+  ));
+
+  EXPECT_THAT (sub.AwaitMessages (Pending ("bar"), 1), ElementsAre (
+    ParseJson (R"(
+      [
+        {
+          "txid": "txid",
+          "name": "domob",
+          "move": [],
+          "burnt": 0
+        }
+      ]
     )")
   ));
 }

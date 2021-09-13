@@ -25,6 +25,9 @@ constexpr const char* PREFIX_ATTACH = "game-block-attach";
 /** Topic prefix for block-detach messages.  */
 constexpr const char* PREFIX_DETACH = "game-block-detach";
 
+/** Topic prefix for pending moves.  */
+constexpr const char* PREFIX_MOVE = "game-pending-move";
+
 /**
  * Tries to parse a given string of move data as JSON.  Returns true
  * if parsing was successful and the move is considered valid.
@@ -382,6 +385,45 @@ ZmqPub::SendBlockDetach (const BlockData& blk, const std::string& reqtoken)
 {
   VLOG (1) << "Block detach: " << blk.hash;
   SendBlock (PREFIX_DETACH, blk, reqtoken);
+}
+
+void
+ZmqPub::SendPendingMoves (const std::vector<MoveData>& moves)
+{
+  CHECK (!moves.empty ());
+  VLOG (1) << "Pending moves for transaction: " << moves.front ().txid;
+  std::lock_guard<std::mutex> lock(mut);
+
+  /* We start with an empty array of moves for each game that we track.  */
+  std::map<std::string, Json::Value> movesPerGame;
+  for (const auto& g : games)
+    movesPerGame.emplace (g, Json::Value (Json::arrayValue));
+
+  /* Process all the MoveData instances, adding to the list of moves
+     per game.  */
+  std::string lastTxid;
+  for (const auto& mv : moves)
+    {
+      if (!lastTxid.empty ())
+        CHECK_EQ (lastTxid, mv.txid) << "All moves must be from the same txid";
+      lastTxid = mv.txid;
+
+      const PerTxData data(mv);
+      for (const auto& entry : data.GetMovesPerGame ())
+        {
+          const auto mit = movesPerGame.find (entry.first);
+          if (mit == movesPerGame.end ())
+            continue;
+
+          CHECK_EQ (games.count (entry.first), 1);
+          mit->second.append (entry.second);
+        }
+    }
+
+  /* Send out all the notifications.  */
+  for (const auto& entry : movesPerGame)
+    if (entry.second.size () > 0)
+      SendMessage (PREFIX_MOVE + (" json " + entry.first), entry.second);
 }
 
 } // namespace xayax

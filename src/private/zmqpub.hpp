@@ -92,6 +92,13 @@ public:
    */
   void SendBlockDetach (const BlockData& blk, const std::string& reqtoken);
 
+  /**
+   * Pushes notifications for all tracked games for one or more moves
+   * created by a pending transaction.  All MoveData entries in the list
+   * must refer to the same txid.
+   */
+  void SendPendingMoves (const std::vector<MoveData>& moves);
+
 };
 
 } // namespace xayax
