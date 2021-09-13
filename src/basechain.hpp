@@ -43,6 +43,13 @@ protected:
    */
   void TipChanged ();
 
+  /**
+   * When a new pending transaction is detected, this method can be used to
+   * notify about all the moves triggered by it.  All MoveData entries
+   * must have the same txid.
+   */
+  void PendingMoves (const std::vector<MoveData>& moves);
+
 public:
 
   BaseChain () = default;
@@ -73,6 +80,13 @@ public:
    */
   virtual std::vector<BlockData> GetBlockRange (uint64_t start,
                                                 uint64_t count) = 0;
+
+  /**
+   * Returns the current mempool of pending transactions (the txids),
+   * where the order may be significant.  This is used for tracking
+   * of pending moves.
+   */
+  virtual std::vector<std::string> GetMempool () = 0;
 
   /**
    * Returns a string identifying the underlying chain / network this
@@ -113,6 +127,11 @@ public:
    * Invoked when the active tip of the basechain is changed.
    */
   virtual void TipChanged () = 0;
+
+  /**
+   * Invoked when a new pending transaction is detected.
+   */
+  virtual void PendingMoves (const std::vector<MoveData>& moves) = 0;
 
 };
 

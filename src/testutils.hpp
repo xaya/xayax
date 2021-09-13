@@ -72,6 +72,9 @@ private:
   /** We use a simple counter to "generate" block hashes.  */
   unsigned hashCounter = 0;
 
+  /** The mempool of txids to return.  */
+  std::vector<std::string> mempool;
+
   /** The chain string to return.  */
   std::string chainString = "test";
   /** The version number to return.  */
@@ -120,6 +123,12 @@ public:
   std::vector<BlockData> AttachBranch (const std::string& parent, unsigned n);
 
   /**
+   * Adds the given tx as pending.  This calls the PendingMoves notifier,
+   * and adds its txid to the mempool.
+   */
+  void AddPending (const std::vector<MoveData>& moves);
+
+  /**
    * Sets the chain string to return.
    */
   void SetChain (const std::string& str);
@@ -132,6 +141,7 @@ public:
   void Start () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
+  std::vector<std::string> GetMempool () override;
   std::string GetChain () override;
   uint64_t GetVersion () override;
 

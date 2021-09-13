@@ -135,6 +135,18 @@ protected:
                   const std::vector<BlockData>& attach,
                   const std::string& reqtoken = "");
 
+  /**
+   * Awaits n pending ZMQ messages and returns them.
+   */
+  std::vector<Json::Value> AwaitPending (size_t num);
+
+  /**
+   * Builds up a move-data instance from the given data.  The actual
+   * move data is built with our GAME_ID and the given JSON value.
+   */
+  static MoveData Move (const std::string& ns, const std::string& name,
+                        const std::string& txid, const Json::Value& mv);
+
 };
 
 /**
@@ -255,6 +267,32 @@ ControllerTests::ExpectZmq (const std::vector<BlockData>& detach,
     }
 }
 
+std::vector<Json::Value>
+ControllerTests::AwaitPending (const size_t num)
+{
+  const std::string topic = "game-pending-move json " + GAME_ID;
+  return controller->sub->AwaitMessages (topic, num);
+}
+
+MoveData
+ControllerTests::Move (const std::string& ns, const std::string& name,
+                       const std::string& txid, const Json::Value& mv)
+{
+  MoveData res;
+  res.ns = ns;
+  res.name = name;
+  res.txid = txid;
+
+  Json::Value fullMove = ParseJson (R"({"g":{}})");
+  fullMove["g"][GAME_ID] = mv;
+
+  std::ostringstream out;
+  out << fullMove;
+  res.mv = out.str ();
+
+  return res;
+}
+
 namespace
 {
 
@@ -369,9 +407,13 @@ TEST_F (ControllerRpcTests, GetZmqNotifications)
   auto expected = ParseJson (R"([
     {
       "type": "pubgameblocks"
+    },
+    {
+      "type": "pubgamepending"
     }
   ])");
-  expected[0]["address"] = ZMQ_ADDR;
+  for (auto& e : expected)
+    e["address"] = ZMQ_ADDR;
 
   EXPECT_EQ (rpc.getzmqnotifications (), expected);
 }
@@ -434,6 +476,49 @@ TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
   EXPECT_EQ (hdr["hash"], a.hash);
   EXPECT_EQ (hdr["height"].asInt (), a.height);
   EXPECT_THROW (rpc.getblockheader ("invalid"), jsonrpc::JsonRpcException);
+}
+
+TEST_F (ControllerRpcTests, Pending)
+{
+  EXPECT_EQ (rpc.getrawmempool (), ParseJson ("[]"));
+
+  const auto mv1 = Move ("p", "domob", "tx1", 1);
+  const auto mv2 = Move ("p", "andy", "tx1", 2);
+  const auto mv3 = Move ("p", "domob", "tx2", 3);
+
+  base.AddPending ({mv1, mv2});
+  base.AddPending ({mv3});
+
+  EXPECT_EQ (rpc.getrawmempool (), ParseJson (R"(["tx1", "tx2"])"));
+
+  EXPECT_THAT (AwaitPending (2), ElementsAre (
+    ParseJson (R"(
+      [
+        {
+          "txid": "tx1",
+          "name": "domob",
+          "move": 1,
+          "burnt": 0
+        },
+        {
+          "txid": "tx1",
+          "name": "andy",
+          "move": 2,
+          "burnt": 0
+        }
+      ]
+    )"),
+    ParseJson (R"(
+      [
+        {
+          "txid": "tx2",
+          "name": "domob",
+          "move": 3,
+          "burnt": 0
+        }
+      ]
+    )")
+  ));
 }
 
 /* ************************************************************************** */

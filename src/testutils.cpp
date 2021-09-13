@@ -144,6 +144,15 @@ TestBaseChain::AttachBranch (const std::string& parent, const unsigned n)
 }
 
 void
+TestBaseChain::AddPending (const std::vector<MoveData>& moves)
+{
+  std::lock_guard<std::mutex> lock(mut);
+  CHECK (!moves.empty ());
+  mempool.push_back (moves.front ().txid);
+  PendingMoves (moves);
+}
+
+void
 TestBaseChain::SetChain (const std::string& str)
 {
   std::lock_guard<std::mutex> lock(mut);
@@ -200,6 +209,13 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
     }
 
   return res;
+}
+
+std::vector<std::string>
+TestBaseChain::GetMempool ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  return mempool;
 }
 
 std::string

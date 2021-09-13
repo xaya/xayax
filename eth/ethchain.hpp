@@ -93,6 +93,7 @@ public:
 
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
+  std::vector<std::string> GetMempool () override;
   std::string GetChain () override;
   uint64_t GetVersion () override;
 

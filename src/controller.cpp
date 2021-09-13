@@ -64,6 +64,7 @@ private:
 
   /* Callbacks from the base chain.  */
   void TipChanged () override;
+  void PendingMoves (const std::vector<MoveData>& moves) override;
 
   /* Callbacks from the sync worker.  */
   void TipUpdatedFrom (const std::string& oldTip,
@@ -164,6 +165,8 @@ Controller::RpcServer::getzmqnotifications ()
   Json::Value cur(Json::objectValue);
   cur["type"] = "pubgameblocks";
   cur["address"] = run.parent.zmqAddr;
+  res.append (cur);
+  cur["type"] = "pubgamepending";
   res.append (cur);
 
   return res;
@@ -308,8 +311,13 @@ Controller::RpcServer::verifymessage (const std::string& addr,
 Json::Value
 Controller::RpcServer::getrawmempool ()
 {
-  /* FIXME: Implement pending tracking */
-  return Json::Value (Json::arrayValue);
+  const auto mempool = run.parent.base.GetMempool ();
+
+  Json::Value res(Json::arrayValue);
+  for (const auto& txid : mempool)
+    res.append (txid);
+
+  return res;
 }
 
 void
@@ -364,6 +372,12 @@ Controller::RunData::TipChanged ()
 {
   if (sync != nullptr)
     sync->NewBaseChainTip ();
+}
+
+void
+Controller::RunData::PendingMoves (const std::vector<MoveData>& moves)
+{
+  zmq.SendPendingMoves (moves);
 }
 
 void

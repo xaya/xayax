@@ -64,6 +64,13 @@ public:
     cv.notify_all ();
   }
 
+  void
+  PendingMoves (const std::vector<MoveData>& moves) override
+  {
+    /* Nothing special happens here.  The pending logic inside the test base
+       chain is trivial enough to not require special testing here.  */
+  }
+
 };
 
 class TestBaseChainTests : public testing::Test

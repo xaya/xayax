@@ -437,6 +437,13 @@ EthChain::GetBlockRange (const uint64_t start, const uint64_t count)
     }
 }
 
+std::vector<std::string>
+EthChain::GetMempool ()
+{
+  /* FIXME: Implement this for real.  */
+  return {};
+}
+
 std::string
 EthChain::GetChain ()
 {

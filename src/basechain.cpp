@@ -22,4 +22,12 @@ BaseChain::TipChanged ()
     cb->TipChanged ();
 }
 
+void
+BaseChain::PendingMoves (const std::vector<MoveData>& moves)
+{
+  std::lock_guard<std::mutex> lock(mut);
+  if (cb != nullptr)
+    cb->PendingMoves (moves);
+}
+
 } // namespace xayax
