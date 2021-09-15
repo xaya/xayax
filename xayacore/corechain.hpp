@@ -27,8 +27,7 @@ class CoreChain : public BaseChain
 
 private:
 
-  class ZmqBlockListener;
-  class ZmqTxListener;
+  class ZmqListener;
 
   /**
    * RPC endpoint for Xaya Core.  We store the endpoint as string and
@@ -40,10 +39,19 @@ private:
   /** ZMQ context used to listen to Xaya Core.  */
   std::unique_ptr<zmq::context_t> zmqCtx;
 
-  /** ZMQ listener for tip updates on Xaya Core.  */
-  std::unique_ptr<ZmqBlockListener> blockListener;
-  /** ZMQ listener for pending moves.  */
-  std::unique_ptr<ZmqTxListener> txListener;
+  /**
+   * Active ZMQ listeners per address they are connected to.  We use this
+   * so we can add a subscription later on to an already connected listener
+   * if the desired notification is using the same address (and thus reuse
+   * a single existing socket to ensure in-order handling of messages).
+   */
+  std::map<std::string, std::unique_ptr<ZmqListener>> listeners;
+
+  /**
+   * Gets and returns the ZmqListener for a given address.  If there is none
+   * yet, we construct a new one.
+   */
+  ZmqListener& GetListenerForAddress (const std::string& addr);
 
 public:
 

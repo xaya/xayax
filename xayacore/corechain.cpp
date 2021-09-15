@@ -180,17 +180,27 @@ GetNotificationAddress (CoreRpc& rpc, const std::string& type)
   return "";
 }
 
+} // anonymous namespace
+
+/* ************************************************************************** */
+
 /**
- * Generic ZMQ listener class that runs a receive loop and reads
- * messages from Xaya Core.
+ * ZMQ listener that can handle tip updates as well as pending transactions
+ * from Xaya Core (pubhashblock and pubrawtx).
  */
-class GenericZmqListener
+class CoreChain::ZmqListener
 {
 
 private:
 
-  /** The topic string this is for.  */
-  const std::string topic;
+  /** Parent instance that the listener notifies about updates.  */
+  CoreChain& parent;
+
+  /**
+   * Mutex used to synchronise the socket.  We need this when we add
+   * a subscription topic to an already connected socket.
+   */
+  std::mutex mut;
 
   /** ZMQ socket for this listener.  */
   zmq::socket_t sock;
@@ -202,49 +212,26 @@ private:
   std::unique_ptr<std::thread> receiver;
 
   /**
-   * Worker method that runs on the receiver thread.
+   * The RPC connection used from the rawtx handler.  This will only
+   * be used from the receiver thread, so it is fine to have one instance
+   * here that is shared between calls.
    */
-  void
-  ReceiveLoop ()
-  {
-    while (!shouldStop)
-      {
-        zmq::message_t msg;
-        if (!sock.recv (msg, zmq::recv_flags::dontwait))
-          {
-            /* No messages available.  Just sleep a bit and try again.  */
-            std::this_thread::sleep_for (std::chrono::milliseconds (1));
-            continue;
-          }
-
-        CHECK_EQ (msg.to_string (), topic);
-
-        /* Multipart messages are delivered atomically.  As long as
-           there are more parts, they are guaranteed to be available
-           now as well.  */
-        CHECK (sock.get (zmq::sockopt::rcvmore));
-        CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
-        const std::string payload = msg.to_string ();
-
-        /* Ignore the sequence number.  */
-        CHECK (sock.get (zmq::sockopt::rcvmore));
-        CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
-        CHECK_EQ (msg.size (), 4);
-        CHECK (!sock.get (zmq::sockopt::rcvmore));
-
-        HandleMessage (payload);
-      }
-  }
-
-protected:
-
-  /** Parent instance that subclasses notify about updates.  */
-  CoreChain& parent;
+  CoreRpc rpc;
 
   /**
-   * Handles a particular message payload.
+   * Worker method that runs on the receiver thread.
    */
-  virtual void HandleMessage (const std::string& payload) = 0;
+  void ReceiveLoop ();
+
+  /**
+   * Handles a tip-update notification payload.
+   */
+  void HandleHashBlock (const std::string& payload);
+
+  /**
+   * Handles a pending transaction payload.
+   */
+  void HandleRawTx (const std::string& payload);
 
 public:
 
@@ -252,12 +239,11 @@ public:
    * Constructs the listener, connecting it already to the given address
    * and starting the receiver thread.
    */
-  explicit GenericZmqListener (CoreChain& p, zmq::context_t& ctx,
-                               const std::string& t, const std::string& addr)
-    : topic(t), sock(ctx, ZMQ_SUB), shouldStop(false), parent(p)
+  explicit ZmqListener (CoreChain& p, zmq::context_t& ctx,
+                        const std::string& addr)
+    : parent(p), sock(ctx, ZMQ_SUB), shouldStop(false), rpc(parent.endpoint)
   {
     sock.connect (addr);
-    sock.set (zmq::sockopt::subscribe, topic);
     receiver = std::make_unique<std::thread> ([this] ()
       {
         ReceiveLoop ();
@@ -265,9 +251,19 @@ public:
   }
 
   /**
+   * Subscribes the socket to the given topic.
+   */
+  void
+  Subscribe (const std::string& topic)
+  {
+    std::lock_guard<std::mutex> lock(mut);
+    sock.set (zmq::sockopt::subscribe, topic);
+  }
+
+  /**
    * Destructs and stops the listener.
    */
-  virtual ~GenericZmqListener ()
+  ~ZmqListener ()
   {
     CHECK (receiver != nullptr);
     shouldStop = true;
@@ -278,71 +274,68 @@ public:
 
 };
 
-} // anonymous namespace
-
-/* ************************************************************************** */
-
-/**
- * Simple ZMQ listener class for the Xaya Core -zmqpubhashblock endpoint,
- * which just notifies the BaseChain about a new tip to request every time
- * a notification is received.
- */
-class CoreChain::ZmqBlockListener : public GenericZmqListener
+void
+CoreChain::ZmqListener::ReceiveLoop ()
 {
+  while (!shouldStop)
+    {
+      std::unique_lock<std::mutex> lock(mut);
 
-protected:
+      zmq::message_t msg;
+      if (!sock.recv (msg, zmq::recv_flags::dontwait))
+        {
+          /* No messages available.  Just sleep a bit and try again.  Make sure
+             to release the lock so a subscription request from another thread
+             can get through easily.  */
+          lock.unlock ();
+          std::this_thread::sleep_for (std::chrono::milliseconds (1));
+          continue;
+        }
+      const std::string topic = msg.to_string ();
 
-  void
-  HandleMessage (const std::string& payload) override
-  {
-    parent.TipChanged ();
-  }
+      /* Multipart messages are delivered atomically.  As long as
+         there are more parts, they are guaranteed to be available
+         now as well.  */
+      CHECK (sock.get (zmq::sockopt::rcvmore));
+      CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
+      const std::string payload = msg.to_string ();
 
-public:
+      /* Ignore the sequence number.  */
+      CHECK (sock.get (zmq::sockopt::rcvmore));
+      CHECK (sock.recv (msg, zmq::recv_flags::dontwait));
+      CHECK_EQ (msg.size (), 4);
+      CHECK (!sock.get (zmq::sockopt::rcvmore));
 
-  explicit ZmqBlockListener (CoreChain& p, zmq::context_t& ctx,
-                             const std::string& addr)
-    : GenericZmqListener(p, ctx, "hashblock", addr)
-  {}
+      /* No need to keep the lock while processing.  */
+      lock.unlock ();
 
-};
+      if (topic == "hashblock")
+        HandleHashBlock (payload);
+      else if (topic == "rawtx")
+        HandleRawTx (payload);
+      else
+        {
+          /* We should not have subscribed to any other topic (independent
+             of what Xaya Core is configured to send).  */
+          LOG (FATAL) << "Unexpected topic: " << topic;
+        }
+    }
+}
 
-/**
- * Simple ZMQ listener class for the Xaya Core -zmqpubrawtx endpoint,
- * which notifies the BaseChain about new pending moves detected.
- */
-class CoreChain::ZmqTxListener : public GenericZmqListener
+void
+CoreChain::ZmqListener::HandleHashBlock (const std::string& payload)
 {
+  parent.TipChanged ();
+}
 
-private:
-
-  /**
-   * The RPC connection used from the message handler.  This will only
-   * be used from the receiver thread, so it is fine to have one instance
-   * here that is shared between calls.
-   */
-  CoreRpc rpc;
-
-protected:
-
-  void
-  HandleMessage (const std::string& payload) override
-  {
-    const auto tx = rpc->decoderawtransaction (Hexlify (payload));
-    MoveData mv;
-    if (GetMoveFromTx (tx, mv))
-      parent.PendingMoves ({mv});
-  }
-
-public:
-
-  explicit ZmqTxListener (CoreChain& p, zmq::context_t& ctx,
-                          const std::string& addr)
-    : GenericZmqListener(p, ctx, "rawtx", addr),
-      rpc(parent.endpoint)
-  {}
-
-};
+void
+CoreChain::ZmqListener::HandleRawTx (const std::string& payload)
+{
+  const auto tx = rpc->decoderawtransaction (Hexlify (payload));
+  MoveData mv;
+  if (GetMoveFromTx (tx, mv))
+    parent.PendingMoves ({mv});
+}
 
 /* ************************************************************************** */
 
@@ -350,7 +343,29 @@ CoreChain::CoreChain (const std::string& ep)
   : endpoint(ep), zmqCtx(new zmq::context_t ())
 {}
 
-CoreChain::~CoreChain () = default;
+CoreChain::~CoreChain ()
+{
+  /* Explicitly destruct the ZMQ listeners / sockets before the context.
+     The definition order in the class also ensures this, but let's be
+     really explicit.  */
+  listeners.clear ();
+  zmqCtx.reset ();
+}
+
+CoreChain::ZmqListener&
+CoreChain::GetListenerForAddress (const std::string& addr)
+{
+  const auto mit = listeners.find (addr);
+  if (mit != listeners.end ())
+    return *mit->second;
+
+  LOG (INFO) << "Connecting ZMQ listener to Xaya Core at " << addr;
+  auto inst = std::make_unique<ZmqListener> (*this, *zmqCtx, addr);
+  auto& res = *inst;
+
+  CHECK (listeners.emplace (addr, std::move (inst)).second);
+  return res;
+}
 
 void
 CoreChain::Start ()
@@ -376,8 +391,7 @@ CoreChain::Start ()
       LOG (INFO)
           << "Using -zmqpubhashblock notifier at " << addr
           << " for receiving tip updates from Xaya Core";
-      blockListener
-          = std::make_unique<ZmqBlockListener> (*this, *zmqCtx, addr);
+      GetListenerForAddress (addr).Subscribe ("hashblock");
     }
 }
 
@@ -398,7 +412,7 @@ CoreChain::EnablePending ()
   LOG (INFO)
       << "Using -zmqpubrawtx notifier at " << addr
       << " for pending moves from Xaya Core";
-  txListener = std::make_unique<ZmqTxListener> (*this, *zmqCtx, addr);
+  GetListenerForAddress (addr).Subscribe ("rawtx");
 
   return true;
 }
