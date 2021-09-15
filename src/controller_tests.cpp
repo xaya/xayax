@@ -125,7 +125,7 @@ protected:
    *
    * If pruning is not -1, then pruning is enabled on the controller.
    */
-  void Restart (int pruning = -1);
+  void Restart (int pruning = -1, bool pending = false);
 
   /**
    * Expects ZMQ messages (first detaches and then attaches) to be received
@@ -213,13 +213,15 @@ ControllerTests::DisableSync ()
 }
 
 void
-ControllerTests::Restart (const int pruning)
+ControllerTests::Restart (const int pruning, const bool pending)
 {
   StopController ();
 
   controller = std::make_unique<TestController> (*this);
   if (pruning >= 0)
     controller->EnablePruning (pruning);
+  if (pending)
+    controller->EnablePending ();
 
   runner = std::make_unique<std::thread> ([this] ()
     {
@@ -415,6 +417,11 @@ TEST_F (ControllerRpcTests, GetZmqNotifications)
   for (auto& e : expected)
     e["address"] = ZMQ_ADDR;
 
+  Restart (-1, true);
+  EXPECT_EQ (rpc.getzmqnotifications (), expected);
+
+  expected.resize (1);
+  Restart (-1, false);
   EXPECT_EQ (rpc.getzmqnotifications (), expected);
 }
 

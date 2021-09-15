@@ -166,8 +166,12 @@ Controller::RpcServer::getzmqnotifications ()
   cur["type"] = "pubgameblocks";
   cur["address"] = run.parent.zmqAddr;
   res.append (cur);
-  cur["type"] = "pubgamepending";
-  res.append (cur);
+
+  if (run.parent.pending)
+    {
+      cur["type"] = "pubgamepending";
+      res.append (cur);
+    }
 
   return res;
 }
@@ -563,6 +567,24 @@ Controller::SetRpcBinding (const int p, const bool local)
   CHECK (run == nullptr) << "Instance is already running";
   rpcPort = p;
   rpcListenLocally = local;
+}
+
+void
+Controller::EnablePending ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  CHECK (run == nullptr) << "Instance is already running";
+
+  if (pending)
+    return;
+
+  if (base.EnablePending ())
+    {
+      pending = true;
+      LOG (INFO) << "Tracking pending moves";
+    }
+  else
+    LOG (WARNING) << "BaseChain does not support pending moves";
 }
 
 void

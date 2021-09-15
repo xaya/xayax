@@ -39,6 +39,11 @@ private:
   /** Height for our genesis block.  */
   uint64_t genesisHeight;
 
+  /**
+   * Set to true if pending tracking is enabled and the base chain supports it.
+   */
+  bool pending = false;
+
   /** Games to track upon start.  */
   std::set<std::string> trackedGames;
 
@@ -117,6 +122,13 @@ public:
    * on localhost) for the RPC server.
    */
   void SetRpcBinding (int p, bool local);
+
+  /**
+   * Tries to enable tracking of pending moves.  This will call EnablePending
+   * on the base-chain implementation, and if the base chain supports pendings,
+   * expose the pending ZMQ endpoint from getzmqnotifications.
+   */
+  void EnablePending ();
 
   /**
    * Enables internal sanity checks.  This will slow down operation

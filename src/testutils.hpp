@@ -139,6 +139,7 @@ public:
   void SetVersion (uint64_t v);
 
   void Start () override;
+  bool EnablePending () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
   std::vector<std::string> GetMempool () override;

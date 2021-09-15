@@ -73,6 +73,19 @@ public:
   {}
 
   /**
+   * When tracking of pending moves should be enabled, this method is
+   * called after Start.  If the base-chain implementation supports
+   * pending moves, then the method should enable all necessary things
+   * and returns true.  If it does not support pending moves, it should
+   * return false.
+   */
+  virtual bool
+  EnablePending ()
+  {
+    return false;
+  }
+
+  /**
    * Retrieves a slice of blocks with all associated data (block metadata
    * and contained moves) on the main chain from height start (inclusive)
    * onward.  If there are no or fewer than count blocks on the main chain

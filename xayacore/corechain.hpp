@@ -51,6 +51,7 @@ public:
   ~CoreChain ();
 
   void Start () override;
+  bool EnablePending () override;
 
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;

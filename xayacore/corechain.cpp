@@ -160,6 +160,27 @@ ConstructBlockData (const Json::Value& data)
 using CoreRpc = RpcClient<CoreRpcClient, jsonrpc::JSONRPC_CLIENT_V1>;
 
 /**
+ * Queries for enabled ZMQ notifications on the Xaya Core node and
+ * tries to find the address for a given type of notification.  If that type
+ * is not enabled, returns the empty string instead.
+ */
+std::string
+GetNotificationAddress (CoreRpc& rpc, const std::string& type)
+{
+  const auto notifications = rpc->getzmqnotifications ();
+  CHECK (notifications.isArray ());
+
+  for (const auto& n : notifications)
+    {
+      CHECK (n.isObject ());
+      if (n["type"].asString () == type)
+        return n["address"].asString ();
+    }
+
+  return "";
+}
+
+/**
  * Generic ZMQ listener class that runs a receive loop and reads
  * messages from Xaya Core.
  */
@@ -345,45 +366,41 @@ CoreChain::Start ()
       << "Xaya Core version is " << version << ", need at least 1.6.0";
   LOG (INFO) << "Connected to Xaya Core version " << version;
 
-  const auto notifications = rpc->getzmqnotifications ();
-  CHECK (notifications.isArray ());
-
-  std::string addrBlock;
-  std::string addrTx;
-  for (const auto& n : notifications)
-    {
-      CHECK (n.isObject ());
-      const std::string type = n["type"].asString ();
-      if (type == "pubhashblock")
-        addrBlock = n["address"].asString ();
-      else if (type == "pubrawtx")
-        addrTx = n["address"].asString ();
-    }
-
-  if (addrBlock.empty ())
+  const std::string addr = GetNotificationAddress (rpc, "pubhashblock");
+  if (addr.empty ())
     LOG (WARNING)
         << "Xaya Core has no -zmqpubhashblock notifier,"
         << " relying on periodic polling only";
   else
     {
       LOG (INFO)
-          << "Using -zmqpubhashblock notifier at " << addrBlock
+          << "Using -zmqpubhashblock notifier at " << addr
           << " for receiving tip updates from Xaya Core";
       blockListener
-          = std::make_unique<ZmqBlockListener> (*this, *zmqCtx, addrBlock);
+          = std::make_unique<ZmqBlockListener> (*this, *zmqCtx, addr);
+    }
+}
+
+bool
+CoreChain::EnablePending ()
+{
+  CoreRpc rpc(endpoint);
+
+  const std::string addr = GetNotificationAddress (rpc, "pubrawtx");
+  if (addr.empty ())
+    {
+      LOG (WARNING)
+          << "Xaya COre has no -zmqpubrawtx notifier,"
+          << " pending moves will not be detected";
+      return false;
     }
 
-  if (addrTx.empty ())
-    LOG (WARNING)
-        << "Xaya COre has no -zmqpubrawtx notifier,"
-        << " pending moves will not be detected";
-  else
-    {
-      LOG (INFO)
-          << "Using -zmqpubrawtx notifier at " << addrTx
-          << " for pending moves from Xaya Core";
-      txListener = std::make_unique<ZmqTxListener> (*this, *zmqCtx, addrTx);
-    }
+  LOG (INFO)
+      << "Using -zmqpubrawtx notifier at " << addr
+      << " for pending moves from Xaya Core";
+  txListener = std::make_unique<ZmqTxListener> (*this, *zmqCtx, addr);
+
+  return true;
 }
 
 std::vector<BlockData>

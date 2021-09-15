@@ -33,6 +33,8 @@ DEFINE_string (zmq_address, "",
 DEFINE_int64 (genesis_height, -1,
                "height from which to start the local chain state");
 
+DEFINE_bool (pending_moves, true,
+             "whether to enable tracking of pending moves");
 DEFINE_int32 (enable_pruning, -1,
               "if non-negative (including zero), old move data will be pruned"
               " and only as many blocks as specified will be kept");
@@ -79,6 +81,8 @@ main (int argc, char* argv[])
 
       controller.SetZmqEndpoint (FLAGS_zmq_address);
       controller.SetRpcBinding (FLAGS_port, FLAGS_listen_locally);
+      if (FLAGS_pending_moves)
+        controller.EnablePending ();
       if (FLAGS_sanity_checks)
         controller.EnableSanityChecks ();
       if (FLAGS_enable_pruning >= 0)

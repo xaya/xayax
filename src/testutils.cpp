@@ -193,6 +193,13 @@ TestBaseChain::Start ()
     });
 }
 
+bool
+TestBaseChain::EnablePending ()
+{
+  /* Nothing specific, just signal that we support pending.  */
+  return true;
+}
+
 std::vector<BlockData>
 TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {
