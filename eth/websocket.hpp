@@ -63,7 +63,7 @@ public:
    * Invoked when a new chain tip is found.
    */
   virtual void
-  NewTip ()
+  NewTip (const std::string& tip)
   {}
 
 };

@@ -41,7 +41,7 @@ protected:
    * When the best chain tip changes on the underlying base chain, this
    * method can be used to notify about this from implementations.
    */
-  void TipChanged ();
+  void TipChanged (const std::string& tip);
 
   /**
    * When a new pending transaction is detected, this method can be used to
@@ -137,9 +137,10 @@ public:
   virtual ~Callbacks () = default;
 
   /**
-   * Invoked when the active tip of the basechain is changed.
+   * Invoked when the active tip of the basechain is changed, with the
+   * hash of the new tip passed in.
    */
-  virtual void TipChanged () = 0;
+  virtual void TipChanged (const std::string& tip) = 0;
 
   /**
    * Invoked when a new pending transaction is detected.

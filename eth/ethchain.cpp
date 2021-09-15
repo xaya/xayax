@@ -156,9 +156,9 @@ EthChain::EthChain (const std::string& httpEndpoint,
 }
 
 void
-EthChain::NewTip ()
+EthChain::NewTip (const std::string& tip)
 {
-  TipChanged ();
+  TipChanged (tip);
 }
 
 void

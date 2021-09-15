@@ -15,11 +15,11 @@ BaseChain::SetCallbacks (Callbacks* c)
 }
 
 void
-BaseChain::TipChanged ()
+BaseChain::TipChanged (const std::string& tip)
 {
   std::lock_guard<std::mutex> lock(mut);
   if (cb != nullptr)
-    cb->TipChanged ();
+    cb->TipChanged (tip);
 }
 
 void

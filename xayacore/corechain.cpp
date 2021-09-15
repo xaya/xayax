@@ -325,7 +325,7 @@ CoreChain::ZmqListener::ReceiveLoop ()
 void
 CoreChain::ZmqListener::HandleHashBlock (const std::string& payload)
 {
-  parent.TipChanged ();
+  parent.TipChanged (Hexlify (payload));
 }
 
 void

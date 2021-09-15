@@ -57,7 +57,7 @@ public:
   }
 
   void
-  TipChanged () override
+  TipChanged (const std::string& tip) override
   {
     std::lock_guard<std::mutex> lock(mut);
     ++tipChanges;

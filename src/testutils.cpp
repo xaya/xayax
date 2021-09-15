@@ -184,10 +184,14 @@ TestBaseChain::Start ()
           if (shouldStop)
             continue;
 
+          const uint64_t newHeight = chain.GetTipHeight ();
+          std::string newTip;
+          CHECK (chain.GetHashForHeight (newHeight, newTip));
+
           /* TipChanged may call back into GetBlockRange (through Sync),
              so make sure that won't deadlock.  */
           lock.unlock ();
-          TipChanged ();
+          TipChanged (newTip);
           lock.lock ();
         }
     });

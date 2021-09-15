@@ -197,8 +197,11 @@ WebSocketSubscriber::Connection::HandleMessage (
       CHECK (params.isObject ());
 
       const std::string sub = params["subscription"].asString ();
+      const auto& result = params["result"];
+      CHECK (result.isObject ());
+
       if (sub == subNewHeads)
-        cb.NewTip ();
+        cb.NewTip (result["hash"].asString ());
     }
 }
 

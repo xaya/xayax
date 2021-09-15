@@ -76,7 +76,7 @@ private:
   bool TryBlockRange (EthRpc& rpc, const int64_t startHeight, int64_t endHeight,
                       std::vector<BlockData>& res) const;
 
-  void NewTip () override;
+  void NewTip (const std::string& tip) override;
 
 public:
 

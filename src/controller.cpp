@@ -63,7 +63,7 @@ private:
   std::unique_ptr<RpcServer> rpc;
 
   /* Callbacks from the base chain.  */
-  void TipChanged () override;
+  void TipChanged (const std::string& tip) override;
   void PendingMoves (const std::vector<MoveData>& moves) override;
 
   /* Callbacks from the sync worker.  */
@@ -372,7 +372,7 @@ Controller::RunData::~RunData ()
 }
 
 void
-Controller::RunData::TipChanged ()
+Controller::RunData::TipChanged (const std::string& tip)
 {
   if (sync != nullptr)
     sync->NewBaseChainTip ();
