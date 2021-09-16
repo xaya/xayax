@@ -5,6 +5,7 @@
 #include "controller.hpp"
 
 #include "private/chainstate.hpp"
+#include "private/pending.hpp"
 #include "private/sync.hpp"
 #include "private/zmqpub.hpp"
 #include "rpc-stubs/xayarpcserverstub.h"
@@ -55,6 +56,7 @@ private:
   Chainstate chain;
   std::unique_ptr<Sync> sync;
   ZmqPub zmq;
+  PendingManager pendings;
 
   /** HTTP connector for the RPC server.  */
   jsonrpc::HttpServer http;
@@ -334,7 +336,7 @@ Controller::RpcServer::stop ()
 
 Controller::RunData::RunData (Controller& p, const std::string& dbFile)
   : parent(p), chain(dbFile),
-    zmq(parent.zmqAddr),
+    zmq(parent.zmqAddr), pendings(zmq),
     http(parent.rpcPort)
 {
   CHECK (parent.run == nullptr);
@@ -374,6 +376,7 @@ Controller::RunData::~RunData ()
 void
 Controller::RunData::TipChanged (const std::string& tip)
 {
+  pendings.TipChanged (tip);
   if (sync != nullptr)
     sync->NewBaseChainTip ();
 }
@@ -381,7 +384,7 @@ Controller::RunData::TipChanged (const std::string& tip)
 void
 Controller::RunData::PendingMoves (const std::vector<MoveData>& moves)
 {
-  zmq.SendPendingMoves (moves);
+  pendings.PendingMoves (moves);
 }
 
 void
@@ -391,6 +394,10 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
   CHECK (!attaches.empty ());
   std::vector<BlockData> detach, queriedAttach;
   PushZmqBlocks (oldTip, attaches, 0, "", detach, queriedAttach);
+
+  /* Potentially push queued pending moves after the block attach/detach
+     notifications have been sent to GSPs.  */
+  pendings.ChainstateTipChanged (attaches.back ().hash);
 
   /* The pruning and sanityChecks flags in parent are never modified
      while the process is running, so it is fine to read them here without

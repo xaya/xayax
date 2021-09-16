@@ -284,6 +284,9 @@ ZmqPub::SendMessage (const std::string& cmd, const Json::Value& data)
   if (!sock.send (zmq::message_t (cmd), zmq::send_flags::sndmore))
     throw zmq::error_t ();
 
+  VLOG (1) << "Sent ZMQ message: " << cmd;
+  VLOG (2) << "Payload data:\n" << data;
+
   /* Once the first send succeeded, ZMQ guarantees atomic delivery of
      the further parts.  */
   CHECK (sock.send (zmq::message_t (dataStr), zmq::send_flags::sndmore));

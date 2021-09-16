@@ -487,6 +487,11 @@ TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
 
 TEST_F (ControllerRpcTests, Pending)
 {
+  /* We need to add a first block to get the PendingManager into synced
+     state and make sure it will forward messages.  */
+  const auto blk = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {blk});
+
   EXPECT_EQ (rpc.getrawmempool (), ParseJson ("[]"));
 
   const auto mv1 = Move ("p", "domob", "tx1", 1);
