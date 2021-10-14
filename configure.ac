@@ -65,6 +65,7 @@ AC_SUBST(WEBSOCKET_LIBS)
 AC_CONFIG_FILES([
   Makefile \
   eth/Makefile \
+  eth/solidity/Makefile \
   eth/tests/Makefile \
   src/Makefile \
   xayacore/Makefile \

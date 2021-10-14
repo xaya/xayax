@@ -11,7 +11,6 @@ e.g. for integration tests.
 from xayagametest import xaya
 
 import jsonrpclib
-import solcx
 from web3 import Web3
 
 from contextlib import contextmanager
@@ -305,17 +304,6 @@ class Ganache:
     tx = self.w3.eth.wait_for_transaction_receipt (txid)
 
     return self.w3.eth.contract (abi=data["abi"], address=tx.contractAddress)
-
-  def deployCode (self, addr, code, *args, **kwargs):
-    """
-    Deploys a smart contract compiled from Solidity code passed
-    in directly.
-    """
-
-    compiled = solcx.compile_source (code)
-
-    _, contract = compiled.popitem ()
-    return self.deployContract (addr, contract, *args, **kwargs)
 
   def deployXaya (self):
     """

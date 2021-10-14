@@ -12,6 +12,7 @@ from xayax import eth, testcase
 from xayagametest import premine
 
 from contextlib import contextmanager
+import json
 import os
 import os.path
 
@@ -38,3 +39,26 @@ class Fixture (testcase.BaseChainFixture):
 
     env = eth.Environment (self.basedir, self.portgen, xethBin)
     return env.run ()
+
+  def deployMultiMover (self):
+    """
+    Deploys the MultiMover test contract in the fixture's environment.
+    Returns the deployed contract instance.
+    """
+
+    scriptPath = os.path.dirname (os.path.abspath (__file__))
+    contracts = os.path.join (scriptPath, "..",
+                              "solidity", "build", "contracts")
+
+    with open (os.path.join (contracts, "MultiMover.json")) as f:
+      data = json.load (f)
+
+    contracts = self.env.contracts
+    deployed = self.env.ganache.deployContract (contracts.account, data,
+                                                contracts.registry.address)
+
+    contracts.registry.functions\
+        .setApprovalForAll (deployed.address, True)\
+        .transact ({"from": contracts.account})
+
+    return deployed

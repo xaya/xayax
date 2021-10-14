@@ -1,4 +1,4 @@
-SUBDIRS = tests
+SUBDIRS = solidity tests
 
 noinst_LTLIBRARIES = libethchain.la
 bin_PROGRAMS = xayax-eth
