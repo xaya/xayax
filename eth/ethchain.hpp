@@ -35,9 +35,6 @@ private:
   /** Contract address of the Xaya account registry.  */
   std::string accountsContract;
 
-  /** The log topic (as hex string) for move events.  */
-  std::string moveTopic;
-
   /**
    * The websocket subscriber we use to get notified about new tips.  It is
    * created if we actually have a ws endpoing.

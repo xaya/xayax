@@ -1,5 +1,6 @@
 SUBDIRS = solidity tests
 
+noinst_PYTHON = gen-contract-constants.py
 noinst_LTLIBRARIES = libethchain.la
 bin_PROGRAMS = xayax-eth
 
@@ -7,8 +8,8 @@ EXTRA_DIST = rpc-stubs/eth.json
 
 RPC_STUBS = \
   rpc-stubs/ethrpcclient.h
-BUILT_SOURCES = $(RPC_STUBS)
-CLEANFILES = $(RPC_STUBS)
+BUILT_SOURCES = contract-constants.cpp $(RPC_STUBS)
+CLEANFILES = contract-constants.cpp $(RPC_STUBS)
 
 libethchain_la_CXXFLAGS = \
   -I$(top_srcdir)/src \
@@ -20,10 +21,12 @@ libethchain_la_LIBADD = \
   $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 libethchain_la_SOURCES = \
   abi.cpp \
+  contract-constants.cpp \
   ethchain.cpp \
   websocket.cpp
 noinst_HEADERS = \
   abi.hpp \
+  contract-constants.hpp \
   ethchain.hpp \
   websocket.hpp \
   $(RPC_STUBS)
@@ -47,5 +50,8 @@ tests_unit_LDADD = $(builddir)/libethchain.la \
 tests_unit_SOURCES = \
   abi_tests.cpp
 
+contract-constants.cpp: gen-contract-constants.py
+	$(srcdir)/gen-contract-constants.py >$@
+	
 rpc-stubs/ethrpcclient.h: $(srcdir)/rpc-stubs/eth.json
 	jsonrpcstub "$<" --cpp-client=EthRpcClient --cpp-client-file="$@"

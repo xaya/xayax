@@ -5,6 +5,7 @@
 #include "ethchain.hpp"
 
 #include "abi.hpp"
+#include "contract-constants.hpp"
 #include "rpcutils.hpp"
 
 #include "rpc-stubs/ethrpcclient.h"
@@ -45,10 +46,6 @@ const std::map<int64_t, std::string> CHAIN_IDS =
     {80'001, "mumbai"},
     {1'337, "ganache"},
   };
-
-/** Event signature of moves.  */
-constexpr const char* MOVE_EVENT
-    = "Move(string,string,string,uint256,uint256,address,uint256,address)";
 
 /**
  * Decimals (precision) of the CHI token.  We could in theory extract
@@ -169,10 +166,6 @@ EthChain::Start ()
   EthRpc rpc(endpoint);
   LOG (INFO) << "Connected to " << rpc->web3_clientVersion ();
 
-  /* Precompute the topic for moves using the RPC server's Keccak
-     method.  We only need to do this once.  */
-  moveTopic = GetEventTopic (*rpc, MOVE_EVENT);
-
   if (sub != nullptr)
     sub->Start (*this);
 }
@@ -184,7 +177,7 @@ EthChain::GetLogsOptions () const
   res["address"] = accountsContract;
 
   Json::Value topics(Json::arrayValue);
-  topics.append (moveTopic);
+  topics.append (MOVE_EVENT);
   res["topics"] = topics;
 
   return res;
@@ -320,7 +313,7 @@ public:
     CHECK (log.isObject ());
 
     CHECK_EQ (log["address"].asString (), parent.accountsContract);
-    CHECK_EQ (log["topics"][0].asString (), parent.moveTopic);
+    CHECK_EQ (log["topics"][0].asString (), MOVE_EVENT);
     CHECK_EQ (ConvertUint256 (log["blockHash"].asString ()), blk.hash);
 
     const int64_t txIndex

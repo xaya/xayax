@@ -6,8 +6,6 @@
 
 #include "rpcutils.hpp"
 
-#include "rpc-stubs/ethrpcclient.h"
-
 #include <glog/logging.h>
 
 namespace xayax
@@ -212,11 +210,5 @@ AbiEncoder::ToLower (const std::string& str)
 }
 
 /* ************************************************************************** */
-
-std::string
-GetEventTopic (EthRpcClient& rpc, const std::string& signature)
-{
-  return rpc.web3_sha3 ("0x" + Hexlify (signature));
-}
 
 } // namespace xayax

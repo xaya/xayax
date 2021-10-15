@@ -23,10 +23,5 @@
     "name": "web3_clientVersion",
     "params": [],
     "returns": "geth 42.0"
-  },
-  {
-    "name": "web3_sha3",
-    "params": ["0x112233"],
-    "returns": "0x123"
   }
 ]
