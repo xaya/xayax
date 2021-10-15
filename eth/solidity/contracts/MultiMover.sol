@@ -19,6 +19,12 @@ contract MultiMover
   constructor (IXayaAccounts acc)
   {
     accounts = acc;
+
+    /* Make sure that the registry contract can spend this contract's WCHI,
+       if there is any.  This may be required if the policy has a fee
+       for moves (as TestPolicy has for instance).  */
+    IERC20 wchi = acc.wchiToken ();
+    wchi.approve (address (acc), type (uint256).max);
   }
 
   /**
@@ -33,6 +39,17 @@ contract MultiMover
         for (uint k = 0; k < mv.length; ++k)
           accounts.move (ns[i], names[j], mv[k],
                          type (uint256).max, 0, address (0));
+  }
+
+  /**
+   * @dev Sends a move, but requires an ETH payment to be attached
+   * to the transaction.
+   */
+  function requireEth (string memory ns, string memory name, string memory mv)
+      public payable
+  {
+    require (msg.value >= 10, "not enough ETH paid");
+    accounts.move (ns, name, mv, type (uint256).max, 0, address (0));
   }
 
 }

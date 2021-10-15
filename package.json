@@ -1,6 +1,11 @@
 {
   "devDependencies": {
+    "chai": "",
+    "chai-subset": "",
+    "truffle-assertions": "",
+    "truffle-contract": "",
+    "@openzeppelin/test-helpers": "",
     "@xaya/wchi": "1.0.0",
-    "@xaya/eth-account-registry": "0.1.0"
+    "@xaya/eth-account-registry": "0.1.2"
   }
 }
