@@ -42,8 +42,8 @@ namespace
 const std::map<int64_t, std::string> CHAIN_IDS =
   {
     {137, "polygon"},
-    {80001, "mumbai"},
-    {1337, "ganache"},
+    {80'001, "mumbai"},
+    {1'337, "ganache"},
   };
 
 /** Event signature of moves.  */
@@ -151,8 +151,7 @@ EthChain::EthChain (const std::string& httpEndpoint,
   /* Convert the accounts contract to all lower-case.  This ensures that
      it will match up with the data returned in logs in our cross-checks,
      while it allows users to pass in the checksum'ed version.  */
-  for (const char c : acc)
-    accountsContract.push_back (std::tolower (c));
+  accountsContract = AbiEncoder::ToLower (acc);
 }
 
 void

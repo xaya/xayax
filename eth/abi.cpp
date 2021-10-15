@@ -13,6 +13,8 @@
 namespace xayax
 {
 
+/* ************************************************************************** */
+
 AbiDecoder::AbiDecoder (const std::string& str)
   : data(str.substr (2)), in(data)
 {
@@ -101,6 +103,100 @@ AbiDecoder::ParseInt (const std::string& str)
 
   return res;
 }
+
+/* ************************************************************************** */
+
+namespace
+{
+
+/**
+ * Asserts that some string has a 0x prefix and strips it off.
+ */
+std::string
+Strip0x (const std::string& str)
+{
+  CHECK_EQ (str.substr (0, 2), "0x") << "Missing hex prefix on " << str;
+  return str.substr (2);
+}
+
+} // anonymous namespace
+
+void
+AbiEncoder::WriteWord (const std::string& data)
+{
+  const std::string plainData = Strip0x (ToLower (data));
+  const int zeros = 2 * 32 - plainData.size ();
+  CHECK_GE (zeros, 0) << "Word has more than 32 bytes already";
+  head << std::string (zeros, '0') << plainData;
+}
+
+void
+AbiEncoder::WriteBytes (const std::string& data)
+{
+  const std::string plainData = Strip0x (ToLower (data));
+
+  CHECK_EQ (plainData.size () % 2, 0);
+  const unsigned numBytes = plainData.size () / 2;
+
+  CHECK_EQ (tail.str ().size () % 2, 0);
+  const unsigned ptr = headWords * 32 + tail.str ().size () / 2;
+  WriteWord (FormatInt (ptr));
+
+  /* Construct a temporary second encoder that we use to write
+     the actual data in the tail portion (length + bytes).  */
+  AbiEncoder dataEnc(1);
+  dataEnc.WriteWord (FormatInt (numBytes));
+  dataEnc.tail << plainData;
+  if (numBytes == 0 || numBytes % 32 > 0)
+    dataEnc.tail << std::string (2 * (32 - (numBytes % 32)), '0');
+  tail << Strip0x (dataEnc.Finalise ());
+}
+
+std::string
+AbiEncoder::Finalise () const
+{
+  const std::string headStr = head.str ();
+  CHECK_EQ (headStr.size (), 2 * 32 * headWords)
+      << "Head words generated don't match the pre-set number";
+  return "0x" + headStr + tail.str ();
+}
+
+std::string
+AbiEncoder::ConcatHex (const std::string& a, const std::string& b)
+{
+  return "0x" + Strip0x (a) + Strip0x (b);
+}
+
+std::string
+AbiEncoder::FormatInt (const uint64_t val)
+{
+  std::ostringstream out;
+  out << std::hex << val;
+  const std::string hexStr = out.str ();
+
+  /* Make sure there is a full number of bytes at least in the string.  */
+  std::ostringstream res;
+  res << "0x";
+  if (hexStr.size () % 2 > 0)
+    res << '0';
+  res << hexStr;
+
+  return res.str ();
+}
+
+std::string
+AbiEncoder::ToLower (const std::string& str)
+{
+  const std::string plain = Strip0x (str);
+
+  std::string out = "0x";
+  for (const char c : plain)
+    out.push_back (std::tolower (c));
+
+  return out;
+}
+
+/* ************************************************************************** */
 
 std::string
 GetEventTopic (EthRpcClient& rpc, const std::string& signature)

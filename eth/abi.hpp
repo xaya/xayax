@@ -58,6 +58,73 @@ public:
 };
 
 /**
+ * Helper class for encoding data into an ABI blob (hex string).
+ */
+class AbiEncoder
+{
+
+private:
+
+  /**
+   * The expected number of words (32-byte groups) in the heads part.
+   * For simplicity, this must be set beforehand when constructing the
+   * encoder, is used for constructing the tail references for dynamic
+   * types, and verified at the end against the actual head generated.
+   */
+  const unsigned headWords;
+
+  /** The stream of head data being written.  */
+  std::ostringstream head;
+
+  /** The stream of tail data being written.  */
+  std::ostringstream tail;
+
+public:
+
+  /**
+   * Constructs a new AbiEncoder instance that is supposed to write the
+   * given number of words on the head part.
+   */
+  explicit AbiEncoder (unsigned w)
+    : headWords(w)
+  {}
+
+  /**
+   * Writes a word of uint data, which will be padded to 32 bytes with
+   * zeros as needed.
+   */
+  void WriteWord (const std::string& data);
+
+  /**
+   * Writes the given data as a dynamic "bytes" instance.
+   */
+  void WriteBytes (const std::string& data);
+
+  /**
+   * Constructs the final string.  Exactly the right number of head words
+   * must have been constructed.
+   */
+  std::string Finalise () const;
+
+  /**
+   * Concatenates two 0x-prefixed hex strings.
+   */
+  static std::string ConcatHex (const std::string& a, const std::string& b);
+
+  /**
+   * Formats a given integer as hex literal suitable to be written
+   * with WriteWord (for instance).
+   */
+  static std::string FormatInt (uint64_t val);
+
+  /**
+   * Converts a hex string to all lower-case.
+   */
+  static std::string ToLower (const std::string& str);
+
+};
+
+/**
  * Returns the topic value (as hex string) of a Solidity event with
  * the given signature.
  */
