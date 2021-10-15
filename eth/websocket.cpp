@@ -32,9 +32,13 @@ private:
 
   /** ID value sent for the subscribe request to new heads.  */
   static constexpr int ID_NEW_HEADS = 1;
+  /** ID value sent for the subscribe request to new pendings.  */
+  static constexpr int ID_PENDING_TX = 2;
 
   /** The subscription ID for new heads.  */
   std::string subNewHeads;
+  /** The subscription ID for pending transactions.  */
+  std::string subPendingTx;
 
   /** The callbacks to invoke.  */
   Callbacks& cb;
@@ -72,6 +76,11 @@ public:
 
   explicit Connection (const std::string& url, Callbacks& c);
   ~Connection ();
+
+  /**
+   * Subscribes to pending transactions.
+   */
+  void EnablePending ();
 
 };
 
@@ -148,6 +157,13 @@ WebSocketSubscriber::Connection::~Connection ()
 }
 
 void
+WebSocketSubscriber::Connection::EnablePending ()
+{
+  auto conn = endpoint.get_con_from_hdl (hdl);
+  SendSubscribe (conn, ID_PENDING_TX, "newPendingTransactions");
+}
+
+void
 WebSocketSubscriber::Connection::SendSubscribe (
     const Client::connection_ptr conn,
     const int id, const std::string& type)
@@ -185,6 +201,11 @@ WebSocketSubscriber::Connection::HandleMessage (
           LOG (INFO) << "Subscribed to new heads: " << subNewHeads;
           break;
 
+        case ID_PENDING_TX:
+          subPendingTx = data["result"].asString ();
+          LOG (INFO) << "Subscribed to pending transactions: " << subPendingTx;
+          break;
+
         default:
           LOG (FATAL) << "Unexpected ID received: " << id;
         }
@@ -198,10 +219,17 @@ WebSocketSubscriber::Connection::HandleMessage (
 
       const std::string sub = params["subscription"].asString ();
       const auto& result = params["result"];
-      CHECK (result.isObject ());
 
       if (sub == subNewHeads)
-        cb.NewTip (result["hash"].asString ());
+        {
+          CHECK (result.isObject ());
+          cb.NewTip (result["hash"].asString ());
+        }
+      else if (sub == subPendingTx)
+        {
+          CHECK (result.isString ());
+          cb.NewPendingTx (result.asString ());
+        }
     }
 }
 
@@ -220,6 +248,13 @@ void
 WebSocketSubscriber::Start (Callbacks& cb)
 {
   connection = std::make_unique<Connection> (endpoint, cb);
+}
+
+void
+WebSocketSubscriber::EnablePending ()
+{
+  CHECK (connection != nullptr) << "WebSocketSubscriber is not yet started";
+  connection->EnablePending ();
 }
 
 void

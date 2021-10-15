@@ -9,6 +9,7 @@ REGTESTS = \
   block_data.py \
   moves_data.py \
   moves_multi.py \
+  pending.py \
   pruning.py \
   verifymessage.py
 

@@ -5,6 +5,7 @@
 #ifndef XAYAX_ETH_ETHCHAIN_HPP
 #define XAYAX_ETH_ETHCHAIN_HPP
 
+#include "pending.hpp"
 #include "websocket.hpp"
 
 #include "basechain.hpp"
@@ -48,6 +49,12 @@ private:
   std::string accountsContract;
 
   /**
+   * The extractor for pending move data.  This is set by EnablePending
+   * and will remain null if pending tracking is not turned on.
+   */
+  std::unique_ptr<PendingDataExtractor> pending;
+
+  /**
    * The websocket subscriber we use to get notified about new tips.  It is
    * created if we actually have a ws endpoing.
    */
@@ -86,6 +93,7 @@ private:
                       std::vector<BlockData>& res) const;
 
   void NewTip (const std::string& tip) override;
+  void NewPendingTx (const std::string& txid) override;
 
 public:
 
@@ -99,6 +107,7 @@ public:
                      const std::string& acc);
 
   void Start () override;
+  bool EnablePending () override;
 
   uint64_t GetTipHeight () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,

@@ -24,10 +24,14 @@ libethchain_la_LIBADD = \
 libethchain_la_SOURCES = \
   contract-constants.cpp \
   ethchain.cpp \
+  hexutils.cpp \
+  pending.cpp \
   websocket.cpp
 noinst_HEADERS = \
   contract-constants.hpp \
   ethchain.hpp \
+  hexutils.hpp \
+  pending.hpp \
   websocket.hpp \
   $(RPC_STUBS)
 
@@ -39,6 +43,17 @@ xayax_eth_LDADD = \
   $(top_builddir)/src/libxayax.la \
   $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 xayax_eth_SOURCES = main.cpp
+
+check_PROGRAMS = tests-unit
+TESTS = tests-unit
+
+tests_unit_CXXFLAGS = \
+  -I$(top_srcdir)/src \
+  $(GLOG_CFLAGS) $(GTEST_CFLAGS)
+tests_unit_LDADD = $(builddir)/libethchain.la \
+  $(GLOG_LIBS) $(GTEST_LIBS)
+tests_unit_SOURCES = \
+  pending_tests.cpp
 
 contract-constants.cpp: gen-contract-constants.py
 	$(srcdir)/gen-contract-constants.py >$@

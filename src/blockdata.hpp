@@ -60,15 +60,28 @@ struct MoveData
   MoveData& operator= (const MoveData&) = default;
   MoveData& operator= (MoveData&&) = default;
 
-  friend bool operator== (const MoveData& a, const MoveData& b)
+  friend bool
+  operator== (const MoveData& a, const MoveData& b)
   {
     return a.txid == b.txid && a.ns == b.ns && a.name == b.name && a.mv == b.mv
             && a.burns == b.burns && a.metadata == b.metadata;
   }
 
-  friend bool operator!= (const MoveData& a, const MoveData& b)
+  friend bool
+  operator!= (const MoveData& a, const MoveData& b)
   {
     return !(a == b);
+  }
+
+  friend std::ostream&
+  operator<< (std::ostream& out, const MoveData& x)
+  {
+    out << "Move " << x.txid << ":\n";
+    out << "  " << x.ns << "/" << x.name << "\n";
+    out << "  " << x.mv << "\n";
+    out << "  with " << x.burns.size () << " burns\n";
+    out << "  metadata:\n" << x.metadata;
+    return out;
   }
 
 };

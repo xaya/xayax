@@ -10,6 +10,11 @@
     "returns": {}
   },
   {
+    "name": "eth_getTransactionByHash",
+    "params": ["0x123"],
+    "returns": {}
+  },
+  {
     "name": "eth_getLogs",
     "params": [{}],
     "returns": []
@@ -22,6 +27,11 @@
   {
     "name": "eth_chainId",
     "params": [],
+    "returns": "0x123"
+  },
+  {
+    "name": "eth_call",
+    "params": [{"tx": 42}, "latest", {"addr": {"state": "overlay"}}],
     "returns": "0x123"
   },
   {

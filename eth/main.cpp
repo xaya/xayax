@@ -37,6 +37,8 @@ DEFINE_string (zmq_address, "",
 DEFINE_int32 (max_reorg_depth, 1'000,
               "maximum supported depth of reorgs");
 
+DEFINE_bool (pending_moves, true,
+             "whether to enable tracking of pending moves");
 DEFINE_bool (sanity_checks, false,
              "whether or not to run slow sanity checks for testing");
 
@@ -74,6 +76,8 @@ main (int argc, char* argv[])
       controller.SetMaxReorgDepth (FLAGS_max_reorg_depth);
       controller.SetZmqEndpoint (FLAGS_zmq_address);
       controller.SetRpcBinding (FLAGS_port, FLAGS_listen_locally);
+      if (FLAGS_pending_moves)
+        controller.EnablePending ();
       if (FLAGS_sanity_checks)
         controller.EnableSanityChecks ();
 
