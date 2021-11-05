@@ -38,6 +38,12 @@ public:
 
   explicit AbiDecoder (const std::string& str);
 
+  AbiDecoder (AbiDecoder&) = delete;
+  void operator= (AbiDecoder&) = delete;
+
+  AbiDecoder (AbiDecoder&&) = default;
+  AbiDecoder& operator= (AbiDecoder&&) = default;
+
   /**
    * Reads a blob of fixed bit size (e.g. uint256 or address/uint160).
    * It is returned as hex string with 0x prefix again.
@@ -45,9 +51,21 @@ public:
   std::string ReadUint (int bits);
 
   /**
+   * Reads a generic dynamic piece of data.  This returns a new AbiDecoder
+   * instance that is based on the tail data.
+   */
+  AbiDecoder ReadDynamic ();
+
+  /**
    * Reads in a string value into a (potentially binary) string.
    */
   std::string ReadString ();
+
+  /**
+   * Reads a dynamic array.  It sets the length in the output argument,
+   * and returns a new decoder that will return the elements one by one.
+   */
+  AbiDecoder ReadArray (size_t& len);
 
   /**
    * Parses a string (hex or decimal) as integer, verifying that

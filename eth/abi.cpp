@@ -45,17 +45,20 @@ AbiDecoder::ReadUint (const int bits)
   return "0x" + data256.substr (expectedZeros);
 }
 
-std::string
-AbiDecoder::ReadString ()
+AbiDecoder
+AbiDecoder::ReadDynamic ()
 {
   /* In the actual data stream we have just a pointer to the tail data
      where the real data for the string is.  */
   const size_t ptr = ParseInt (ReadUint (256));
 
-  /* Construct a temporary new decoder instance that starts on this data,
-     and use it to read the actual underlying string.  */
-  AbiDecoder dec("0x" + data.substr (2 * ptr));
+  return AbiDecoder ("0x" + data.substr (2 * ptr));
+}
 
+std::string
+AbiDecoder::ReadString ()
+{
+  AbiDecoder dec = ReadDynamic ();
   const size_t len = ParseInt (dec.ReadUint (256));
 
   const std::string hexData = dec.ReadBytes (len);
@@ -73,6 +76,18 @@ AbiDecoder::ReadString ()
   CHECK (Unhexlify (hexData, res));
 
   return res;
+}
+
+AbiDecoder
+AbiDecoder::ReadArray (size_t& len)
+{
+  AbiDecoder dec = ReadDynamic ();
+  len = ParseInt (dec.ReadUint (256));
+
+  /* When the elements contain dynamic data, tail pointers in them
+     are actually relative to the start of the elements data, not including
+     the initial length.  */
+  return AbiDecoder ("0x" + dec.data.substr (2 * 0x20));
 }
 
 int64_t
