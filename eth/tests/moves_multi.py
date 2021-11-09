@@ -35,17 +35,23 @@ if __name__ == "__main__":
       ids = [
         f.sendMove ("p/domob", {"g": {"game": 1}}),
         f.sendMove ("g/game", {"cmd": 1}),
-        contracts.multi.functions.send (["p"], ["game", "domob"], [
-          json.dumps ({"g": {"game": 2}}),
-          json.dumps ({"g": {"game": 3}}),
-        ]).transact ({"from": contracts.account, "gas": 500_000}),
-        contracts.multi.functions.send (["p", "g"], ["game"], [
-          json.dumps ({"g": {"game": 4}, "cmd": 2}),
-        ]).transact ({"from": contracts.account, "gas": 500_000}),
-        contracts.multi.functions.send (["g"], ["game"], [
-          json.dumps ({"cmd": 3}),
-          json.dumps ({"cmd": 4}),
-        ]).transact ({"from": contracts.account, "gas": 500_000}),
+        uintToXaya (
+          contracts.multi.functions.send (["p"], ["game", "domob"], [
+            json.dumps ({"g": {"game": 2}}),
+            json.dumps ({"g": {"game": 3}}),
+          ]).transact ({"from": contracts.account, "gas": 500_000}).hex ()
+        ),
+        uintToXaya (
+          contracts.multi.functions.send (["p", "g"], ["game"], [
+            json.dumps ({"g": {"game": 4}, "cmd": 2}),
+          ]).transact ({"from": contracts.account, "gas": 500_000}).hex ()
+        ),
+        uintToXaya (
+          contracts.multi.functions.send (["g"], ["game"], [
+            json.dumps ({"cmd": 3}),
+            json.dumps ({"cmd": 4}),
+          ]).transact ({"from": contracts.account, "gas": 500_000}).hex ()
+        ),
         f.sendMove ("p/domob", {"g": {"game": 42}}),
         f.sendMove ("g/game", {"cmd": 100}),
       ]
@@ -55,31 +61,31 @@ if __name__ == "__main__":
 
       f.assertEqual (data["admin"], [
         {
-          "txid": uintToXaya (ids[1].hex ()),
+          "txid": ids[1],
           "cmd": 1,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[3].hex ()),
+          "txid": ids[3],
           "cmd": 2,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[4].hex ()),
+          "txid": ids[4],
           "cmd": 3,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[4].hex ()),
+          "txid": ids[4],
           "cmd": 4,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[6].hex ()),
+          "txid": ids[6],
           "cmd": 100,
           "burnt": 0,
           "out": {},
@@ -87,49 +93,49 @@ if __name__ == "__main__":
       ])
       f.assertEqual (data["moves"], [
         {
-          "txid": uintToXaya (ids[0].hex ()),
+          "txid": ids[0],
           "name": "domob",
           "move": 1,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[2].hex ()),
+          "txid": ids[2],
           "name": "game",
           "move": 2,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[2].hex ()),
+          "txid": ids[2],
           "name": "game",
           "move": 3,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[2].hex ()),
+          "txid": ids[2],
           "name": "domob",
           "move": 2,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[2].hex ()),
+          "txid": ids[2],
           "name": "domob",
           "move": 3,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[3].hex ()),
+          "txid": ids[3],
           "name": "game",
           "move": 4,
           "burnt": 0,
           "out": {},
         },
         {
-          "txid": uintToXaya (ids[5].hex ()),
+          "txid": ids[5],
           "name": "domob",
           "move": 42,
           "burnt": 0,

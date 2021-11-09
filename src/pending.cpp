@@ -12,6 +12,7 @@ namespace xayax
 void
 PendingManager::TipChanged (const std::string& tip)
 {
+  VLOG (1) << "Received new tip from notifications: " << tip;
   std::lock_guard<std::mutex> lock(mut);
 
   LOG_IF (WARNING, !pendingsQueue.empty ())
@@ -40,6 +41,7 @@ PendingManager::PendingMoves (const std::vector<MoveData>& moves)
   /* If we are synced up, just send the moves right away.  */
   if (chainstateTip == notificationTip)
     {
+      VLOG (1) << "Sending " << moves.size () << " pending moves immediately";
       CHECK (pendingsQueue.empty ());
       zmq.SendPendingMoves (moves);
       return;
@@ -47,12 +49,14 @@ PendingManager::PendingMoves (const std::vector<MoveData>& moves)
 
   /* Otherwise add to the queue, so we can potentially send it later when
      the chainstate catches up.  */
+  VLOG (1) << "Adding " << moves.size () << " pending moves to queue";
   pendingsQueue.push_back (moves);
 }
 
 void
 PendingManager::ChainstateTipChanged (const std::string& newTip)
 {
+  VLOG (1) << "Received new best chainstate tip: " << newTip;
   std::lock_guard<std::mutex> lock(mut);
 
   chainstateTip = newTip;

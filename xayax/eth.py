@@ -476,8 +476,9 @@ class Environment:
     if addr is None:
       addr = self.contracts.account
     self.registered.add ((ns, nm))
-    return self.contracts.registry.functions.register (ns, nm)\
+    txid = self.contracts.registry.functions.register (ns, nm)\
               .transact ({"from": addr})
+    return uintToXaya (txid.hex ())
 
   def move (self, ns, nm, strval, addr=None, send=None):
     if addr is None:
@@ -492,6 +493,7 @@ class Environment:
     # When sending a move right after registering a name (while the registration
     # may not yet have confirmed), estimate_gas fails.  Thus we provide our
     # own gas limit here.
-    return self.contracts.registry.functions\
+    txid = self.contracts.registry.functions\
               .move (ns, nm, strval, maxUint256, amount, recipient)\
               .transact ({"from": addr, "gas": 500_000})
+    return uintToXaya (txid.hex ())

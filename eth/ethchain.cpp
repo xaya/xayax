@@ -158,7 +158,10 @@ EthChain::EthChain (const std::string& httpEndpoint,
 void
 EthChain::NewTip (const std::string& tip)
 {
-  TipChanged (tip);
+  /* We use block hashes without 0x prefix internally, so need to strip
+     off the prefix here as well (even though in the end it is just a string
+     in this place and not a true uint256 value).  */
+  TipChanged (ConvertUint256 (tip));
 }
 
 void
