@@ -9,6 +9,7 @@
 
 #include "rpc-stubs/ethrpcclient.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -39,6 +40,15 @@ private:
   std::string accountsOverlayCode;
 
   /**
+   * The whitelist of contract addresses that may trigger moves.  We only
+   * simulate transactions to those addresses, so that we can filter out
+   * most unrelated transactions on the network quickly.  Of course in theory
+   * there can be other contracts (e.g. custom ones) that can trigger moves,
+   * but those moves will just be ignored by our best-effort policy.
+   */
+  std::set<std::string> watchedContracts;
+
+  /**
    * Decodes an ABI-encoded result of move logs from the CallForwarder
    * into the MoveData structure.
    */
@@ -60,6 +70,12 @@ public:
    */
   std::vector<MoveData> GetMoves (EthRpcClient& rpc,
                                   const std::string& txid) const;
+
+  /**
+   * Adds a contract address to the list of addresses we consider as potentially
+   * triggering moves.
+   */
+  void AddWatchedContract (const std::string& addr);
 
 };
 

@@ -241,6 +241,13 @@ EthChain::EnablePending ()
   return true;
 }
 
+void
+EthChain::AddWatchedContract (const std::string& addr)
+{
+  CHECK (pending != nullptr) << "Pending tracking is not yet enabled";
+  pending->AddWatchedContract (addr);
+}
+
 Json::Value
 EthChain::GetLogsOptions () const
 {

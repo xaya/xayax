@@ -41,13 +41,26 @@ class Fixture (testcase.BaseChainFixture):
       xethBin = os.path.join (top_builddir, "eth", "xayax-eth")
     xethCmd = [xethBin] + self.getXayaXExtraArgs ()
 
+    def deploymentCb (env):
+      self.setupExtraDeployment (env)
+
     env = eth.Environment (self.basedir, self.portgen, xethCmd)
+    env.addDeploymentCallback (deploymentCb)
     return env.run ()
 
-  def deployMultiMover (self):
+  def setupExtraDeployment (self, env):
     """
-    Deploys the MultiMover test contract in the fixture's environment.
-    Returns the deployed contract instance.
+    This method gets invoked when the test environment is started, after
+    the basic Ethereum chain is set up but before Xaya X is started.  It can
+    be used to perform custom test-specific deployments required.
+    """
+
+    pass
+
+  def deployMultiMover (self, env=None):
+    """
+    Deploys the MultiMover test contract in the environment (defaulting
+    to the fixture's).  Returns the deployed contract instance.
     """
 
     scriptPath = os.path.dirname (os.path.abspath (__file__))
@@ -57,9 +70,11 @@ class Fixture (testcase.BaseChainFixture):
     with open (os.path.join (contracts, "MultiMover.json")) as f:
       data = json.load (f)
 
-    contracts = self.env.contracts
-    deployed = self.env.ganache.deployContract (contracts.account, data,
-                                                contracts.registry.address)
+    if env is None:
+      env = self.env
+    contracts = env.contracts
+    deployed = env.ganache.deployContract (contracts.account, data,
+                                           contracts.registry.address)
 
     contracts.registry.functions\
         .setApprovalForAll (deployed.address, True)\

@@ -106,6 +106,13 @@ public:
                      const std::string& wsEndpoint,
                      const std::string& acc);
 
+  /**
+   * Adds the given address as a transaction target contract that can
+   * potentially trigger moves (so that we watch it in pending
+   * transactions).
+   */
+  void AddWatchedContract (const std::string& addr);
+
   void Start () override;
   bool EnablePending () override;
 

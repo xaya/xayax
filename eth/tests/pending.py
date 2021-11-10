@@ -22,6 +22,22 @@ import copy
 import json
 
 
+class PendingFixture (ethtest.Fixture):
+  """
+  Custom test fixture for tests with pending moves.  It adds the multi-mover
+  contract to the deployment, and enables pending watching for both the
+  basic accounts contract and the multi mover.
+  """
+
+  def setupExtraDeployment (self, env):
+    env.contracts.multi = self.deployMultiMover (env)
+    env.addWatchedContract (env.contracts.registry.address)
+    env.addWatchedContract (env.contracts.multi.address)
+
+    # Set up another contract which is not on the watched list.
+    env.contracts.extra = self.deployMultiMover (env)
+
+
 def extractMvids (data):
   """
   Removes the mvid values from all the entries in data, returning
@@ -40,9 +56,8 @@ def extractMvids (data):
 
 
 if __name__ == "__main__":
-  with ethtest.Fixture () as f:
+  with PendingFixture () as f:
     contracts = f.env.contracts
-    contracts.multi = f.deployMultiMover ()
 
     f.env.register ("p", "domob")
     f.env.register ("p", "andy")
@@ -58,6 +73,12 @@ if __name__ == "__main__":
       # This will not trigger a pending move and should just be
       # handled gracefully.
       f.env.register ("p", "foobar")
+
+      # This is actually a move, but from a contract not tracked and thus
+      # won't show up in the pending notifications either.
+      contracts.extra.functions.send (["p"], ["domob"], [
+        json.dumps ({"g": {"game": "should be ignored"}})
+      ]).transact ({"from": contracts.account, "gas": 500_000})
 
       # Trigger some pending moves with various specific properties.
       ids = [

@@ -78,6 +78,15 @@ PendingDataExtractor::PendingDataExtractor (EthRpcClient& rpc,
                                     accArgs.Finalise ());
 }
 
+void
+PendingDataExtractor::AddWatchedContract (const std::string& addr)
+{
+  const ethutils::Address parsed(addr);
+  CHECK (parsed) << "Invalid watched contract address: " << addr;
+  LOG (INFO) << "Watching transactions to " << parsed << " for potential moves";
+  watchedContracts.insert (parsed.GetChecksummed ());
+}
+
 std::vector<MoveData>
 PendingDataExtractor::GetMoves (EthRpcClient& rpc,
                                 const std::string& txid) const
@@ -97,6 +106,14 @@ PendingDataExtractor::GetMoves (EthRpcClient& rpc,
   const ethutils::Address to(data["to"].asString ());
   CHECK (from && to) << "Invalid addresses received from RPC";
   const std::string callData = data["input"].asString ();
+
+  /* If this address is not to one of the whitelisted contracts that we
+     want to watch for moves, ignore it.  */
+  if (watchedContracts.count (to.GetChecksummed ()) == 0)
+    {
+      VLOG (1) << "Ignoring pending transaction to non-watched target " << to;
+      return {};
+    }
 
   AbiEncoder execArgs(2);
   execArgs.WriteWord (to.GetChecksummed ());
