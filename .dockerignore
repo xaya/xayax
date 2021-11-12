@@ -1,0 +1,5 @@
+docker/Dockerfile
+
+.git
+**/node_modules
+**/.*.swp
