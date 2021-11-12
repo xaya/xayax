@@ -217,7 +217,10 @@ EthChain::NewPendingTx (const std::string& txid)
     }
 
   if (!moves.empty ())
-    PendingMoves (moves);
+    {
+      mempool.Add (ConvertUint256 (txid));
+      PendingMoves (moves);
+    }
 }
 
 void
@@ -300,7 +303,7 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
       CHECK_EQ (err, 0)
           << "Error " << err << " retrieving block at height "
           << heightForId.at (id) << ":\n"
-          << err << resp.getErrorMessage (id);
+          << err << resp.getErrorMessage (idVal);
 
       const auto blockJson = resp.getResult (id);
       if (blockJson.isNull ())
@@ -562,8 +565,8 @@ EthChain::GetMainchainHeight (const std::string& hash)
 std::vector<std::string>
 EthChain::GetMempool ()
 {
-  /* FIXME: Implement this for real.  */
-  return {};
+  EthRpc rpc(endpoint);
+  return mempool.GetContent (*rpc);
 }
 
 bool

@@ -80,6 +80,13 @@ if __name__ == "__main__":
         json.dumps ({"g": {"game": "should be ignored"}})
       ]).transact ({"from": contracts.account, "gas": 500_000})
 
+      # The mempool only contains actual tracked transactions.
+      f.assertEqual (xrpc.getrawmempool (), [])
+      # The second call ensures that the implementation has no problem
+      # with an empty internal pool (while the first call could in theory
+      # have a non-empty pool to start with and just removed some transactions).
+      f.assertEqual (xrpc.getrawmempool (), [])
+
       # Trigger some pending moves with various specific properties.
       ids = [
         f.sendMove ("p/domob", {"g": {"game": "foo"}}),
@@ -153,8 +160,12 @@ if __name__ == "__main__":
         },
       ])
 
-      # FIXME: Enable once we have proper mempool support.
-      # f.assertEqual (xrpc.getrawmempool (), ids)
+      f.assertEqual (xrpc.getrawmempool (), ids)
+
+      snapshot = f.env.snapshot ()
+      f.generate (1)
+      f.syncBlocks ()
+      f.assertEqual (xrpc.getrawmempool (), [])
 
       # To check the mvid field, we do another move now.  A difficulty
       # is that the mvid depends on the nonce, but the nonce from a pending
@@ -179,11 +190,6 @@ if __name__ == "__main__":
       # FIXME: It seems Ganache is not resurrecting transactions.
       # Look into this and see what to do for testing reorgs.
       if False:
-        snapshot = f.env.snapshot ()
-        f.generate (1)
-        f.syncBlocks ()
-        f.assertEqual (xrpc.getrawmempool (), [])
-
         snapshot.restore ()
         _, d = sub.receive ()
         f.assertEqual (extractMvid (d), data1)

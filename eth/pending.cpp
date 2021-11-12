@@ -15,11 +15,15 @@
 
 #include <glog/logging.h>
 
+#include <algorithm>
+
 using ethutils::AbiDecoder;
 using ethutils::AbiEncoder;
 
 namespace xayax
 {
+
+/* ************************************************************************** */
 
 namespace
 {
@@ -171,5 +175,135 @@ PendingDataExtractor::DecodeMoveLogs (const std::string& txid,
 
   return res;
 }
+
+/* ************************************************************************** */
+
+void
+PendingMempool::Add (const std::string& txid)
+{
+  std::lock_guard<std::mutex> lock(mut);
+  pool.insert (txid);
+}
+
+namespace
+{
+
+/**
+ * Compares two transaction JSON values according to the ordering in which
+ * we want to return the mempool content.  This mainly orders by nonce
+ * within a sender address, and orders also by sender address to ensure
+ * we get a well-defined ordering overall (even though the order in which
+ * transactions from multiple senders are confirmed is not defined).
+ */
+bool
+IsEarlierForMempool (const Json::Value& a, const Json::Value& b)
+{
+  CHECK (a.isObject ());
+  CHECK (b.isObject ());
+  const ethutils::Address fromA(a["from"].asString ());
+  const ethutils::Address fromB(b["from"].asString ());
+  CHECK (fromA && fromB) << "Invalid addresses returned in RPC";
+  if (fromA != fromB)
+    return fromA.GetLowerCase () < fromB.GetLowerCase ();
+
+  const int64_t nonceA = AbiDecoder::ParseInt (a["nonce"].asString ());
+  const int64_t nonceB = AbiDecoder::ParseInt (b["nonce"].asString ());
+  return nonceA < nonceB;
+}
+
+} // anonymous namespace
+
+std::vector<std::string>
+PendingMempool::GetContent (EthRpcClient& rpc)
+{
+  /* We check the underlying node's status of each transaction that is in our
+     local pool (with a single batch call).  */
+  jsonrpc::BatchCall req;
+  std::vector<std::pair<int, std::string>> idsWithTxid;
+  {
+    std::lock_guard<std::mutex> lock(mut);
+
+    /* Avoid empty batch calls (and also speed up matters) in the
+       not-so-uncommon situation that we don't have any tracked transactions
+       pending at the moment.  */
+    if (pool.empty ())
+      return {};
+
+    for (const auto& txid : pool)
+      {
+        Json::Value params(Json::arrayValue);
+        params.append ("0x" + txid);
+        const int id = req.addCall ("eth_getTransactionByHash", params);
+        idsWithTxid.emplace_back (id, txid);
+      }
+  }
+
+  /* While the actual RPC call is running, we do not hold the lock to ensure
+     parallel calls are fine.  In theory a new transaction could be added
+     now or some removed by a parallel call, but that's fine.  */
+  auto resp = rpc.CallProcedures (req);
+
+  /* Transactions that come back with a null blockHash are still pending, those
+     are the ones we return from the call.  Transactions that are not found
+     or that have a non-null blockHash can be removed.
+
+     Note that in case of a race condition, the returned transactions may not
+     exactly match the current pool.  Transactions in the pool which are not
+     in the RPC response will just be ignored here (neither returned from the
+     method nor removed).  */
+  std::vector<Json::Value> transactions;
+  {
+    std::lock_guard<std::mutex> lock(mut);
+    for (const auto& entry : idsWithTxid)
+      {
+        Json::Value idVal(entry.first);
+        const int err = resp.getErrorCode (idVal);
+        CHECK_EQ (err, 0)
+            << "Error " << err << " retrieving transaction data"
+            << " for " << entry.second << ":\n"
+            << resp.getErrorMessage (idVal);
+
+        const auto txJson = resp.getResult (entry.first);
+        if (txJson.isNull ())
+          {
+            VLOG (1)
+                << "Transaction " << entry.second
+                << " is unknown, removing from mempool";
+            pool.erase (entry.second);
+            continue;
+          }
+
+        CHECK (txJson.isObject ());
+        CHECK_EQ (txJson["hash"].asString (), "0x" + entry.second);
+
+        if (txJson["blockHash"].isNull ())
+          {
+            VLOG (2)
+                << "Transaction " << entry.second << " is still pending";
+            transactions.push_back (txJson);
+          }
+        else
+          {
+            VLOG (1)
+                << "Transaction " << entry.second
+                << " has been confirmed, removing from mempool";
+            pool.erase (entry.second);
+          }
+      }
+  }
+
+  /* Order the transactions properly and return the final result.
+     The important criterion is that we order within one sender address
+     by nonce, and we do order by sender as well to ensure a well-defined
+     result ordering.  */
+  std::sort (transactions.begin (), transactions.end (), &IsEarlierForMempool);
+  std::vector<std::string> res;
+  for (const auto& tx : transactions)
+    res.push_back (ConvertUint256 (tx["hash"].asString ()));
+
+  return res;
+}
+
+/* ************************************************************************** */
 
 } // namespace xayax

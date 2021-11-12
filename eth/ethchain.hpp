@@ -54,6 +54,9 @@ private:
    */
   std::unique_ptr<PendingDataExtractor> pending;
 
+  /** Local cache of the mempool of tracked transactions.  */
+  PendingMempool mempool;
+
   /**
    * The websocket subscriber we use to get notified about new tips.  It is
    * created if we actually have a ws endpoing.
