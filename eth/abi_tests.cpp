@@ -74,11 +74,6 @@ TEST_F (AbiEncoderTests, ConcatHex)
   EXPECT_DEATH (AbiEncoder::ConcatHex ("0x1234", "bbcc"), "Missing hex prefix");
 }
 
-TEST_F (AbiEncoderTests, ToLower)
-{
-  EXPECT_EQ (AbiEncoder::ToLower ("0x12abDe"), "0x12abde");
-}
-
 TEST_F (AbiEncoderTests, ForwarderExecute)
 {
   /* These are real ABI-encoded arguments for the CallForwarder.execute

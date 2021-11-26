@@ -10,6 +10,8 @@
 
 #include "rpc-stubs/ethrpcclient.h"
 
+#include <eth-utils/address.hpp>
+
 #include <jsonrpccpp/client.h>
 
 #include <gflags/gflags.h>
@@ -120,12 +122,14 @@ ExtractMove (const Json::Value& val)
   dec.ReadUint (160);
 
   const int64_t amount = AbiDecoder::ParseInt (dec.ReadUint (256));
-  const std::string receiver = dec.ReadUint (160);
+  const ethutils::Address receiver(dec.ReadUint (160));
+  CHECK (receiver) << "Invalid receiver address returned from RPC";
 
   Json::Value out(Json::objectValue);
   CHECK_GE (amount, 0);
   if (amount > 0)
-    out[receiver] = static_cast<double> (amount) / std::pow (10.0, DECIMALS);
+    out[receiver.GetChecksummed ()]
+        = static_cast<double> (amount) / std::pow (10.0, DECIMALS);
   res.metadata["out"] = out;
 
   return res;
@@ -148,7 +152,9 @@ EthChain::EthChain (const std::string& httpEndpoint,
   /* Convert the accounts contract to all lower-case.  This ensures that
      it will match up with the data returned in logs in our cross-checks,
      while it allows users to pass in the checksum'ed version.  */
-  accountsContract = AbiEncoder::ToLower (acc);
+  const ethutils::Address accAddr(acc);
+  CHECK (accAddr) << "Accounts contract address is invalid";
+  accountsContract = accAddr.GetLowerCase ();
 }
 
 void

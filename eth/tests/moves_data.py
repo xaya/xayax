@@ -52,7 +52,7 @@ if __name__ == "__main__":
             "txid": txid2,
             "cmd": "admin",
             "burnt": 0,
-            "out": {addr1.lower (): 0.12345678},
+            "out": {addr1: 0.12345678},
           },
         ],
         "moves": [
@@ -68,7 +68,7 @@ if __name__ == "__main__":
             "name": "andy",
             "move": {},
             "burnt": 0,
-            "out": {addr2.lower (): 42},
+            "out": {addr2: 42},
           },
         ],
       })

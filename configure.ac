@@ -35,6 +35,7 @@ CXXFLAGS="${CXXFLAGS} -DGLOG_NO_ABBREVIATED_SEVERITIES"
 AX_PKG_CHECK_MODULES([JSONCPP], [jsoncpp], [])
 
 # Private dependencies of the library itself.
+AX_PKG_CHECK_MODULES([ETHUTILS], [], [ethutils])
 AX_PKG_CHECK_MODULES([JSONRPCCLIENT], [], [libjsonrpccpp-client])
 AX_PKG_CHECK_MODULES([JSONRPCSERVER], [], [libjsonrpccpp-server])
 AX_PKG_CHECK_MODULES([GLOG], [], [libglog])

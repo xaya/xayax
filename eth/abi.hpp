@@ -133,11 +133,6 @@ public:
    */
   static std::string FormatInt (uint64_t val);
 
-  /**
-   * Converts a hex string to all lower-case.
-   */
-  static std::string ToLower (const std::string& str);
-
 };
 
 } // namespace xayax

@@ -13,10 +13,12 @@ CLEANFILES = contract-constants.cpp $(RPC_STUBS)
 
 libethchain_la_CXXFLAGS = \
   -I$(top_srcdir)/src \
+  $(ETHUTILS_CFLAGS) \
   $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) \
   $(WEBSOCKET_CFLAGS) $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
 libethchain_la_LIBADD = \
   $(top_builddir)/src/libxayax.la \
+  $(ETHUTILS_LIBS) \
   $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) \
   $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 libethchain_la_SOURCES = \

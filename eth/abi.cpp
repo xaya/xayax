@@ -132,6 +132,21 @@ Strip0x (const std::string& str)
   return str.substr (2);
 }
 
+/**
+ * Converts a given string to lower case.
+ */
+std::string
+ToLower (const std::string& str)
+{
+  const std::string plain = Strip0x (str);
+
+  std::string out = "0x";
+  for (const char c : plain)
+    out.push_back (std::tolower (c));
+
+  return out;
+}
+
 } // anonymous namespace
 
 void
@@ -195,18 +210,6 @@ AbiEncoder::FormatInt (const uint64_t val)
   res << hexStr;
 
   return res.str ();
-}
-
-std::string
-AbiEncoder::ToLower (const std::string& str)
-{
-  const std::string plain = Strip0x (str);
-
-  std::string out = "0x";
-  for (const char c : plain)
-    out.push_back (std::tolower (c));
-
-  return out;
 }
 
 /* ************************************************************************** */
