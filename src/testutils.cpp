@@ -229,6 +229,13 @@ TestBaseChain::GetMempool ()
   return mempool;
 }
 
+bool
+TestBaseChain::VerifyMessage (const std::string& msg,
+                              const std::string& signature, std::string& addr)
+{
+  LOG (FATAL) << "TestBaseChain::VerifyMessage is not implemented";
+}
+
 std::string
 TestBaseChain::GetChain ()
 {

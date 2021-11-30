@@ -102,6 +102,22 @@ public:
   virtual std::vector<std::string> GetMempool () = 0;
 
   /**
+   * Verifies a message signed with an address (based on how this is done
+   * on the given base chain).  This method should try to recover the
+   * public key from the signature and, if successful, return the address
+   * that would lead to a valid signature.  If recovery fails or some data
+   * is completely invalid, the method should return false.
+   *
+   * Note that it is assumed that addresses have a single, unique
+   * representation.  For instance, on Ethereum where they are in principle
+   * case insensitive, it is explicitly specified that addresses are supposed
+   * to be returned and compared in checksummed form only.
+   */
+  virtual bool VerifyMessage (const std::string& msg,
+                              const std::string& signature,
+                              std::string& addr) = 0;
+
+  /**
    * Returns a string identifying the underlying chain / network this
    * corresponds to.  The string should be one of the supported strings
    * by libxayagame.

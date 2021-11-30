@@ -9,6 +9,8 @@
 
 #include "basechain.hpp"
 
+#include <eth-utils/ecdsa.hpp>
+
 #include <memory>
 
 namespace xayax
@@ -24,6 +26,9 @@ private:
 
   class BlockMoveExtractor;
   class EthRpc;
+
+  /** EthUtils ECDSA precomputed data.  */
+  const ethutils::ECDSA ecdsa;
 
   /**
    * RPC endpoint for Ethereum.  We store the endpoint as string and
@@ -91,6 +96,8 @@ public:
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
   std::vector<std::string> GetMempool () override;
+  bool VerifyMessage (const std::string& msg, const std::string& signature,
+                      std::string& addr) override;
   std::string GetChain () override;
   uint64_t GetVersion () override;
 

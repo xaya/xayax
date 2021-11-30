@@ -310,8 +310,32 @@ Controller::RpcServer::verifymessage (const std::string& addr,
                                       const std::string& msg,
                                       const std::string& sgn)
 {
-  /* FIXME: Implement based on BaseChain */
-  return Json::Value ();
+  /* If addr is passed as "", then this RPC is supposed to do recovery
+     and return the signer address.  Otherwise, it should just return true
+     or false depending on validity for the given address.  This is what the
+     RPC does in Xaya Core.  */
+  const bool addrRecovery = addr.empty ();
+
+  std::string signerAddr;
+  const bool ok = run.parent.base.VerifyMessage (msg, sgn, signerAddr);
+
+  if (!ok)
+    {
+      if (!addrRecovery)
+        return false;
+
+      Json::Value res(Json::objectValue);
+      res["valid"] = false;
+      return res;
+    }
+
+  if (!addrRecovery)
+    return signerAddr == addr;
+
+  Json::Value res(Json::objectValue);
+  res["valid"] = true;
+  res["address"] = signerAddr;
+  return res;
 }
 
 Json::Value

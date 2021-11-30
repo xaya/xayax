@@ -445,6 +445,18 @@ EthChain::GetMempool ()
   return {};
 }
 
+bool
+EthChain::VerifyMessage (const std::string& msg, const std::string& signature,
+                         std::string& addr)
+{
+  const auto ethAddr = ecdsa.VerifyMessage (msg, signature);
+  if (!ethAddr)
+    return false;
+
+  addr = ethAddr.GetChecksummed ();
+  return true;
+}
+
 std::string
 EthChain::GetChain ()
 {

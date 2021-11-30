@@ -35,7 +35,6 @@ CXXFLAGS="${CXXFLAGS} -DGLOG_NO_ABBREVIATED_SEVERITIES"
 AX_PKG_CHECK_MODULES([JSONCPP], [jsoncpp], [])
 
 # Private dependencies of the library itself.
-AX_PKG_CHECK_MODULES([ETHUTILS], [], [ethutils])
 AX_PKG_CHECK_MODULES([JSONRPCCLIENT], [], [libjsonrpccpp-client])
 AX_PKG_CHECK_MODULES([JSONRPCSERVER], [], [libjsonrpccpp-server])
 AX_PKG_CHECK_MODULES([GLOG], [], [libglog])
@@ -48,6 +47,7 @@ AX_PKG_CHECK_MODULES([GFLAGS], [], [gflags])
 
 # Private dependencies that are not needed for the library, but only for
 # the unit tests and the binaries.
+PKG_CHECK_MODULES([ETHUTILS], [ethutils])
 PKG_CHECK_MODULES([GTEST], [gmock gtest_main])
 
 # Stuff that we need for websocketpp.

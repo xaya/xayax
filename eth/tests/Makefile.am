@@ -8,7 +8,8 @@ REGTESTS = \
   attach_detach.py \
   block_data.py \
   moves_data.py \
-  moves_multi.py
+  moves_multi.py \
+  verifymessage.py
 
 EXTRA_DIST = $(REGTESTS) $(TEST_LIBRARY)
 TESTS = $(REGTESTS)

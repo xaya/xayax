@@ -490,6 +490,32 @@ CoreChain::GetMempool ()
   return res;
 }
 
+bool
+CoreChain::VerifyMessage (const std::string& msg, const std::string& signature,
+                          std::string& addr)
+{
+  CoreRpc rpc(endpoint);
+
+  Json::Value res;
+  try
+    {
+      res = rpc->verifymessage ("", msg, signature);
+    }
+  catch (const jsonrpc::JsonRpcException& exc)
+    {
+      CHECK_EQ (exc.GetCode (), -3)
+          << "Unexpected error from Xaya Core verifymessage: " << exc.what ();
+      return false;
+    }
+  CHECK (res.isObject ());
+
+  if (!res["valid"].asBool ())
+    return false;
+
+  addr = res["address"].asString ();
+  return true;
+}
+
 std::string
 CoreChain::GetChain ()
 {
