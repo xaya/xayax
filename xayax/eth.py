@@ -11,6 +11,7 @@ e.g. for integration tests.
 from xayagametest import xaya
 
 import jsonrpclib
+from eth_account import Account, messages
 from web3 import Web3
 
 from contextlib import contextmanager
@@ -396,6 +397,7 @@ class Environment:
     """
 
     with self.ganache.run ():
+      self.signerAccounts = {}
       self.contracts = self.ganache.deployXaya ()
       self.log.info ("WCHI contract: %s" % self.contracts.wchi.address)
       self.log.info ("Accounts contract: %s" % self.contracts.registry.address)
@@ -464,6 +466,17 @@ class Environment:
   def getChainTip (self):
     data = self.ganache.w3.eth.get_block ("latest")
     return uintToXaya (data["hash"].hex ()), data["number"]
+
+  def createSignerAddress (self):
+    account = Account.create ()
+    self.signerAccounts[account.address] = account
+    return account.address
+
+  def signMessage (self, addr, msg):
+    assert addr in self.signerAccounts, "%s is not a signer address" % addr
+    account = self.signerAccounts[addr]
+    encoded = messages.encode_defunct (text=msg)
+    return account.sign_message (encoded).signature.hex ()
 
   def nameExists (self, ns, nm):
     # We use an in-memory register of names that have been registered,

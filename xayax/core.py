@@ -178,6 +178,12 @@ class Environment:
   def generate (self, num):
     return self.env.generate (num)
 
+  def createSignerAddress (self):
+    return self.env.createSignerAddress ()
+
+  def signMessage (self, addr, msg):
+    return self.env.signMessage (addr, msg)
+
   def getChainTip (self):
     return self.env.getChainTip ()
 
