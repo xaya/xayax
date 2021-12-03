@@ -122,10 +122,8 @@ protected:
   /**
    * Recreates the Controller instance, including starting it.  If there is
    * already an instance, it will be stopped and destructed first.
-   *
-   * If pruning is not -1, then pruning is enabled on the controller.
    */
-  void Restart (int pruning = -1, bool pending = false);
+  void Restart (unsigned maxReorgDepth = 1'000'000, bool pending = false);
 
   /**
    * Expects ZMQ messages (first detaches and then attaches) to be received
@@ -213,13 +211,12 @@ ControllerTests::DisableSync ()
 }
 
 void
-ControllerTests::Restart (const int pruning, const bool pending)
+ControllerTests::Restart (const unsigned maxReorgDepth, const bool pending)
 {
   StopController ();
 
   controller = std::make_unique<TestController> (*this);
-  if (pruning >= 0)
-    controller->EnablePruning (pruning);
+  controller->SetMaxReorgDepth (maxReorgDepth);
   if (pending)
     controller->EnablePending ();
 
@@ -350,10 +347,10 @@ TEST_F (ControllerTests, PruningDepth)
     }, "is already pruned");
 }
 
-TEST_F (ControllerTests, PruningZeroDepth)
+TEST_F (ControllerTests, ZeroReorgDepth)
 {
   ExpectZmq ({}, {genesis});
-  Restart (1);
+  Restart (0);
   const auto a = base.SetTip (base.NewBlock ());
   const auto b = base.SetTip (base.NewBlock ());
   ExpectZmq ({}, {a, b});
@@ -417,11 +414,11 @@ TEST_F (ControllerRpcTests, GetZmqNotifications)
   for (auto& e : expected)
     e["address"] = ZMQ_ADDR;
 
-  Restart (-1, true);
+  Restart (1'000'000, true);
   EXPECT_EQ (rpc.getzmqnotifications (), expected);
 
   expected.resize (1);
-  Restart (-1, false);
+  Restart (1'000'000, false);
   EXPECT_EQ (rpc.getzmqnotifications (), expected);
 }
 

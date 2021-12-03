@@ -113,9 +113,9 @@ public:
                       std::vector<BlockData>& branch) const;
 
   /**
-   * Prunes all move and extra data for blocks on the main chain with a height
-   * below the given number (i.e. asserts that those blocks will certainly
-   * not end up on a branch in the future).
+   * Prunes all data of blocks on the main chain at or below the given height.
+   * This in essence asserts that those blocks will certainly not end up on a
+   * reorg in the future.
    */
   void Prune (uint64_t untilHeight);
 

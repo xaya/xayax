@@ -430,14 +430,11 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
   if (parent.sanityChecks)
     chain.SanityCheck ();
 
-  if (parent.pruning != -1)
-    {
-      CHECK_GE (parent.pruning, 0);
-      const auto tipHeight = chain.GetTipHeight ();
-      CHECK_GE (tipHeight, parent.genesisHeight);
-      if (tipHeight > parent.pruning)
-        chain.Prune (tipHeight - parent.pruning);
-    }
+  CHECK_GE (parent.maxReorgDepth, 0);
+  const auto tipHeight = chain.GetTipHeight ();
+  CHECK_GE (tipHeight, parent.genesisHeight);
+  if (tipHeight > parent.maxReorgDepth)
+    chain.Prune (tipHeight - parent.maxReorgDepth);
 }
 
 void
@@ -628,12 +625,12 @@ Controller::EnableSanityChecks ()
 }
 
 void
-Controller::EnablePruning (unsigned depth)
+Controller::SetMaxReorgDepth (unsigned depth)
 {
   std::lock_guard<std::mutex> lock(mut);
   CHECK (run == nullptr) << "Instance is already running";
-  LOG (INFO) << "Turned on pruning with depth " << depth;
-  pruning = depth;
+  LOG (INFO) << "Setting maximum reorg depth to " << depth;
+  maxReorgDepth = depth;
 }
 
 void
@@ -666,6 +663,7 @@ Controller::Run ()
   std::unique_lock<std::mutex> lock(mut);
 
   CHECK (run == nullptr) << "Instance is already running";
+  CHECK_GE (maxReorgDepth, 0) << "No maximum reorg depth has been configured";
   CHECK (!zmqAddr.empty ()) << "No ZMQ address has been configured";
   CHECK_GT (rpcPort, -1) << "No RPC port has been configured";
 

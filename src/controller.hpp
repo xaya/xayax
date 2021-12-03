@@ -51,10 +51,11 @@ private:
   bool sanityChecks = false;
 
   /**
-   * If set to something other than -1, pruning of move data in the
-   * chain state is enabled for blocks this far behind the tip.
+   * The maximum depth of a reorg that we support.  We only keep blocks
+   * in the main chain this far behind current tip.  Must be configured with
+   * SetMaxReorgDepth before the Controller is started.
    */
-  int pruning = -1;
+  int maxReorgDepth = -1;
 
   /** Endpoint for the ZMQ server.  */
   std::string zmqAddr;
@@ -137,10 +138,12 @@ public:
   void EnableSanityChecks ();
 
   /**
-   * Turns on pruning of move data for blocks that are a certain depth
-   * behind the tip.
+   * Configures the maximum depth of a supported reorg.  This controls
+   * how many main-chain blocks are kept behind tip during operation, and
+   * where initial syncing will start.  Must be set before the Controller
+   * can be started.
    */
-  void EnablePruning (unsigned depth);
+  void SetMaxReorgDepth (unsigned depth);
 
   /**
    * Marks a given game to be tracked right upon start of the controller.

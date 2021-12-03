@@ -8,7 +8,7 @@ case $1 in
       --datadir="/xayax" \
       --port=8000 \
       --zmq_address="tcp://${HOST}:28555" \
-      --enable_pruning=1000 \
+      --max_reorg_depth=1000 \
       "$@"
     ;;
 
