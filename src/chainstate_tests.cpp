@@ -176,6 +176,7 @@ TEST_F (ChainstateTests, BasicChain)
   EXPECT_EQ (oldTip, b);
 
   EXPECT_EQ (state.GetTipHeight (), 13);
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), 10);
 
   std::string hash;
   EXPECT_FALSE (state.GetHashForHeight (9, hash));
@@ -373,8 +374,13 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   for (unsigned i = 0; i < 20; ++i)
     cur = AddBlock (cur);
 
-  /* Prune up to the tip (excluding only the last block).  */
-  state.Prune (state.GetTipHeight () - 1);
+  /* Prune up to the tip (excluding only the last two blocks).  We also
+     record the block hash of the preceding (then pruned) block for later.  */
+  std::string prunedHash;
+  ASSERT_TRUE (state.GetHashForHeight (state.GetTipHeight () - 2, prunedHash));
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), 10);
+  state.Prune (state.GetTipHeight () - 2);
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), state.GetTipHeight () - 1);
 
   /* Retrieving the fork branch for the two orphan blocks should still work,
      including all the data.  */
@@ -382,22 +388,16 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   ASSERT_TRUE (state.GetForkBranch (b, branch));
   EXPECT_THAT (branch, ElementsAre (GetBlock (b), GetBlock (a)));
 
-  /* Forking the very last block is fine.  */
+  /* Forking the very last block is fine (we still got the common parent
+     not yet pruned).  */
   std::string hash;
   ASSERT_TRUE (state.GetHashForHeight (state.GetTipHeight () - 1, hash));
   AddBlock (hash);
   ASSERT_TRUE (state.GetForkBranch (cur, branch));
 
-  /* Forking a block further down aborts as we have already pruned
-     those detached blocks.  */
-  ASSERT_TRUE (state.GetHashForHeight (state.GetTipHeight () - 2, hash));
-  EXPECT_DEATH (
-    {
-      /* We need to do the AddBlock also here inside the EXPECT_DEATH
-         macro, or else the end-of-test sanity check will die as well.  */
-      AddBlock (hash);
-      state.GetForkBranch (cur, branch);
-    }, "is already pruned");
+  /* Forking a block further down fails as we have already pruned
+     the parent block it would be attached to.  */
+  EXPECT_EQ (AddBlock (prunedHash), "error");
 }
 
 TEST_F (ChainstateTests, UpdateBatch)
