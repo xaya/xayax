@@ -32,6 +32,14 @@
     "returns": {}
   },
   {
+    "name": "getblockheader",
+    "params":
+      {
+        "blockhash": "hash"
+      },
+    "returns": {}
+  },
+  {
     "name": "decoderawtransaction",
     "params":
       {
