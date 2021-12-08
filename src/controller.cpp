@@ -241,10 +241,21 @@ Controller::RpcServer::getblockhash (const int height)
   std::lock_guard<std::mutex> lock(run.mutChain);
 
   std::string hash;
-  if (!run.chain.GetHashForHeight (height, hash))
+  if (run.chain.GetHashForHeight (height, hash))
+    return hash;
+
+  /* This might be a pruned block.  In this case, we query the main chain
+     for it.  */
+
+  if (height >= run.chain.GetLowestUnprunedHeight ())
     throw jsonrpc::JsonRpcException (-8, "block height out of range");
 
-  return hash;
+  const auto blocks = run.parent.base.GetBlockRange (height, 1);
+  if (blocks.empty ())
+    throw jsonrpc::JsonRpcException (-8, "block height out of range");
+
+  CHECK_EQ (blocks.size (), 1);
+  return blocks[0].hash;
 }
 
 Json::Value
@@ -252,15 +263,26 @@ Controller::RpcServer::getblockheader (const std::string& hash)
 {
   std::lock_guard<std::mutex> lock(run.mutChain);
 
-  uint64_t height;
-  if (!run.chain.GetHeightForHash (hash, height))
-    throw jsonrpc::JsonRpcException (-5, "block not found");
-
   Json::Value res(Json::objectValue);
   res["hash"] = hash;
-  res["height"] = static_cast<Json::Int64> (height);
 
-  return res;
+  uint64_t height;
+  if (run.chain.GetHeightForHash (hash, height))
+    {
+      res["height"] = static_cast<Json::Int64> (height);
+      return res;
+    }
+
+  /* Check the base chain to see if this might be a pruned block.  */
+  const int64_t baseHeight = run.parent.base.GetMainchainHeight (hash);
+  if (baseHeight != -1)
+    {
+      CHECK_GE (baseHeight, 0);
+      res["height"] = static_cast<Json::Int64> (baseHeight);
+      return res;
+    }
+
+  throw jsonrpc::JsonRpcException (-5, "block not found");
 }
 
 Json::Value
@@ -433,8 +455,8 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
   CHECK_GE (parent.maxReorgDepth, 0);
   const auto tipHeight = chain.GetTipHeight ();
   CHECK_GE (tipHeight, parent.genesisHeight);
-  if (tipHeight > parent.maxReorgDepth)
-    chain.Prune (tipHeight - parent.maxReorgDepth);
+  if (tipHeight > parent.maxReorgDepth + 1)
+    chain.Prune (tipHeight - parent.maxReorgDepth - 1);
 }
 
 void
@@ -446,15 +468,24 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
                                     std::vector<BlockData>& queriedAttach)
 {
   detach.clear ();
+  int64_t mainchainHeight = -1;
   if (!from.empty () && !chain.GetForkBranch (from, detach))
     {
-      /* This should not happen in practice.  For notifications triggered
-         due to sync updates, the from block will always be one we have
-         in the chain state; for notifications triggered by GSPs, it should
-         also be a known block, unless the GSP was previously connected
-         to a different instance.  */
-      LOG (ERROR) << "Requested 'from' block " << from << " is known";
-      return;
+      /* The block is not known, which most likely means that it is
+         an old main chain block that was pruned.  */
+      mainchainHeight = parent.base.GetMainchainHeight (from);
+      if (mainchainHeight == -1)
+        {
+          /* Usually, the 'from' block is one that was previously a best tip
+             (and thus either the local chainstate is syncing from it due to
+             a tip update, or a GSP requests blocks from what it previously
+             got as best tip from Xaya X).  Thus the current situation should
+             only happen due to a reorg beyond the pruning depth.  */
+          LOG (ERROR)
+              << "Requested 'from' block " << from
+              << " is unknown and also not on the main chain";
+          return;
+        }
     }
   for (const auto& blk : detach)
     zmq.SendBlockDetach (blk, reqtoken);
@@ -467,6 +498,12 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
       /* This is the very first attach, starting from the genesis.  */
       CHECK (detach.empty ());
       forkHeight = parent.genesisHeight;
+    }
+  else if (mainchainHeight != -1)
+    {
+      /* The fork is going back to a pruned block on main chain.  */
+      CHECK_GE (mainchainHeight, parent.genesisHeight);
+      forkHeight = mainchainHeight + 1;
     }
   else if (detach.empty ())
     {
@@ -544,16 +581,22 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
 
   /* We need to make sure that we are not sending any attaches
      for blocks that are not in our local chain state, so GSPs cannot get
-     stuck on them in any case.  */
-  uint64_t height;
-  if (!chain.GetHeightForHash (queriedAttach.back ().hash, height))
+     stuck on them in any case.  If they are before our pruning depth,
+     then it should be fine.  */
+  const int64_t pruningDepth = chain.GetLowestUnprunedHeight ();
+  CHECK_GE (pruningDepth, 0);
+  if (queriedAttach.back ().height >= static_cast<uint64_t> (pruningDepth))
     {
-      LOG (WARNING)
-          << "Attach blocks are not known to the local chain state yet";
-      queriedAttach.clear ();
-      return;
+      uint64_t height;
+      if (!chain.GetHeightForHash (queriedAttach.back ().hash, height))
+        {
+          LOG (WARNING)
+              << "Attach blocks are not known to the local chain state yet";
+          queriedAttach.clear ();
+          return;
+        }
+      CHECK_EQ (height, queriedAttach.back ().height);
     }
-  CHECK_EQ (height, queriedAttach.back ().height);
 
   for (const auto& blk : queriedAttach)
     zmq.SendBlockAttach (blk, reqtoken);

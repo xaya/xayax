@@ -178,9 +178,21 @@ Sync::UpdateStep ()
   if (blocks.empty () || !chain.SetTip (blocks.front (), oldTip))
     {
       /* The first block does not fit to our existing chain.  We need to
-         go back and request blocks prior until we find the fork point.  */
+         go back and request blocks prior until we find the fork point.
+
+         Make sure that the first block can (by height) fit to our pruned chain.
+         Note that usually we would need the next block to be one *above* the
+         lowest unpruned height to fit (so we know the parent as well), but
+         there is no harm in requesting that block itself as well.  If it
+         matches the one we have, then the attach will be fine.  This also
+         covers the case of just detaches back to the lowest unpruned block.  */
       IncreaseNumBlocks ();
-      nextStartHeight = std::max<int64_t> (genesisHeight, startHeight - num);
+      nextStartHeight = std::max<int64_t> (chain.GetLowestUnprunedHeight (),
+                                           startHeight - num);
+      /* If this did not decrease the start height at all, it means that we are
+         already at the lowest unpruned height but that is not good enough.
+         In other words, a reorg beyond the pruning depth.  */
+      CHECK_LT (nextStartHeight, startHeight) << "Reorg beyond pruning depth";
       return true;
     }
 

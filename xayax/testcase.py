@@ -241,6 +241,19 @@ class Fixture:
     self.log.error ("The value of:\n%s\n\nis not equal to:\n%s" % (a, b))
     raise AssertionError ("%s != %s" % (a, b))
 
+  def assertRaises (self, fcn, *args, **kwargs):
+    """
+    Asserts that the given call throws an exception.
+    """
+
+    try:
+      fcn (*args, **kwargs)
+      raise AssertionError ("Call did not throw as expected")
+    except AssertionError:
+      raise
+    except:
+      pass
+
   def assertZmqBlocks (self, sub, typ, hashes, reqtoken=None):
     """
     Receives messages on the ZMQ subscriber, expecting attach/detach messages

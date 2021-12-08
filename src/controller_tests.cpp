@@ -327,7 +327,7 @@ TEST_F (ControllerTests, Restart)
   ExpectZmq ({a}, {b, c});
 }
 
-TEST_F (ControllerTests, PruningDepth)
+TEST_F (ControllerTests, ReorgBeyondPruningDepth)
 {
   const auto a = base.SetTip (base.NewBlock ());
   const auto b = base.SetTip (base.NewBlock ());
@@ -344,7 +344,7 @@ TEST_F (ControllerTests, PruningDepth)
       Restart ();
       const auto c = base.SetTip (base.NewBlock (a.hash));
       ExpectZmq ({branch2[1], branch2[0], b}, {c});
-    }, "is already pruned");
+    }, "Reorg beyond pruning depth");
 }
 
 TEST_F (ControllerTests, ZeroReorgDepth)
@@ -576,16 +576,16 @@ TEST_F (ControllerSendUpdatesTests, AttachOnly)
 
 TEST_F (ControllerSendUpdatesTests, DetachOnly)
 {
-  base.SetTip (genesis);
-  ExpectZmq ({c, b}, {});
+  base.SetTip (b);
+  ExpectZmq ({c}, {});
 
-  const auto upd = rpc.game_sendupdates (a.hash, GAME_ID);
-  EXPECT_EQ (upd["toblock"], genesis.hash);
+  const auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], b.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 0,
     "detach": 1
   })"));
-  ExpectZmq ({a}, {}, upd["reqtoken"].asString ());
+  ExpectZmq ({c}, {}, upd["reqtoken"].asString ());
 }
 
 TEST_F (ControllerSendUpdatesTests, DetachAndAttach)
@@ -648,6 +648,36 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
     "detach": 1
   })"));
   ExpectZmq ({c}, {}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
+{
+  /* genesis - b - c - d
+            |  \ - branch0 - branch1 - branch2
+             \ a
+  */
+
+  Restart (2);
+  const auto d = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {d});
+  const auto branch = base.AttachBranch (b.hash, 5);
+  ExpectZmq ({d, c}, branch);
+
+  auto upd = rpc.game_sendupdates (d.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], branch.back ().hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 5,
+    "detach": 2
+  })"));
+  ExpectZmq ({d, c}, branch, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates (b.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], branch.back ().hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 5,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, branch, upd["reqtoken"].asString ());
 }
 
 /* ************************************************************************** */

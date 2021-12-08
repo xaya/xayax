@@ -95,6 +95,12 @@ public:
                                                 uint64_t count) = 0;
 
   /**
+   * Queries for a block by hash, and returns that block's height
+   * if it is known and on the main chain, and -1 otherwise.
+   */
+  virtual int64_t GetMainchainHeight (const std::string& hash) = 0;
+
+  /**
    * Returns the current mempool of pending transactions (the txids),
    * where the order may be significant.  This is used for tracking
    * of pending moves.

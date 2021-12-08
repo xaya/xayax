@@ -222,6 +222,26 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
   return res;
 }
 
+int64_t
+TestBaseChain::GetMainchainHeight (const std::string& hash)
+{
+  std::lock_guard<std::mutex> lock(mut);
+
+  uint64_t height;
+  if (!chain.GetHeightForHash (hash, height))
+    return -1;
+
+  /* The block is known, but we need to verify as well if it is on
+     the main chain.  */
+  std::string mainchainHash;
+  if (!chain.GetHashForHeight (height, mainchainHash))
+    return -1;
+  if (mainchainHash != hash)
+    return -1;
+
+  return height;
+}
+
 std::vector<std::string>
 TestBaseChain::GetMempool ()
 {
