@@ -438,6 +438,48 @@ EthChain::GetBlockRange (const uint64_t start, const uint64_t count)
     }
 }
 
+int64_t
+EthChain::GetMainchainHeight (const std::string& hash)
+{
+  const std::string prefixHash = "0x" + hash;
+
+  EthRpc rpc(endpoint);
+
+  /* There seems to be no direct way of getting the number of main-chain
+     confirmations for a block.  But we can query for the block by hash
+     to get its height (if any) first, and then query for that height to
+     see if the returned block from the main chain matches.  */
+
+  std::string heightHex;
+  try
+    {
+      const auto data = rpc->eth_getBlockByHash (prefixHash, false);
+      if (data.isNull ())
+        return -1;
+      CHECK (data.isObject ());
+      heightHex = data["number"].asString ();
+    }
+  catch (const jsonrpc::JsonRpcException& exc)
+    {
+      LOG (WARNING) << "RPC error from eth_getBlockByHash: " << exc.what ();
+      return -1;
+    }
+
+  const auto mainchain = rpc->eth_getBlockByNumber (heightHex, false);
+  if (mainchain.isNull ())
+    {
+      /* This might happen in a rare edge case, namely when the block was
+         there previously but has just been detached, or if it is part of
+         a branch that extends further than current tip.  */
+      return -1;
+    }
+  CHECK (mainchain.isObject ());
+  if (mainchain["hash"] != prefixHash)
+    return -1;
+
+  return AbiDecoder::ParseInt (heightHex);
+}
+
 std::vector<std::string>
 EthChain::GetMempool ()
 {

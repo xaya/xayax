@@ -9,6 +9,7 @@ REGTESTS = \
   block_data.py \
   moves_data.py \
   moves_multi.py \
+  pruning.py \
   verifymessage.py
 
 EXTRA_DIST = $(REGTESTS) $(TEST_LIBRARY)

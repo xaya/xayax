@@ -5,6 +5,11 @@
     "returns": {}
   },
   {
+    "name": "eth_getBlockByHash",
+    "params": ["0x123", false],
+    "returns": {}
+  },
+  {
     "name": "eth_getLogs",
     "params": [{}],
     "returns": []
