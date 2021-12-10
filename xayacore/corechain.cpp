@@ -417,6 +417,14 @@ CoreChain::EnablePending ()
   return true;
 }
 
+uint64_t
+CoreChain::GetTipHeight ()
+{
+  CoreRpc rpc(endpoint);
+  const auto blockchain = rpc->getblockchaininfo ();
+  return blockchain["blocks"].asUInt64 ();
+}
+
 std::vector<BlockData>
 CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {

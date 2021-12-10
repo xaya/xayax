@@ -415,6 +415,13 @@ EthChain::AddMovesFromHeightRange (EthRpc& rpc,
     }
 }
 
+uint64_t
+EthChain::GetTipHeight ()
+{
+  EthRpc rpc(endpoint);
+  return AbiDecoder::ParseInt (rpc->eth_blockNumber ());
+}
+
 std::vector<BlockData>
 EthChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {

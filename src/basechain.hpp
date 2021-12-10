@@ -86,6 +86,11 @@ public:
   }
 
   /**
+   * Returns the block height of the current tip.
+   */
+  virtual uint64_t GetTipHeight () = 0;
+
+  /**
    * Retrieves a slice of blocks with all associated data (block metadata
    * and contained moves) on the main chain from height start (inclusive)
    * onward.  If there are no or fewer than count blocks on the main chain

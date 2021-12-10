@@ -204,6 +204,15 @@ TestBaseChain::EnablePending ()
   return true;
 }
 
+uint64_t
+TestBaseChain::GetTipHeight ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  const int64_t height = chain.GetTipHeight ();
+  CHECK_GE (height, 0) << "No genesis has been set yet";
+  return height;
+}
+
 std::vector<BlockData>
 TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {
