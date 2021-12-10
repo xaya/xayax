@@ -315,21 +315,27 @@ Chainstate::GetHeightForHash (const std::string& hash, uint64_t& height) const
 }
 
 void
-Chainstate::Initialise (const BlockData& genesis)
+Chainstate::ImportTip (const BlockData& tip)
 {
-  LOG (INFO)
-      << "Initialising chainstate with genesis block "
-      << genesis.hash << " at height " << genesis.height;
+  const int64_t oldTip = GetTipHeight ();
+  if (oldTip != -1)
+    CHECK_LT (oldTip, tip.height)
+        << "Imported block should have larger height as current tip";
 
-  Execute (R"(
-    DROP TABLE `blocks`;
-    DROP TABLE `moves`;
-  )");
-  SetupSchema (*this);
+  LOG (INFO)
+      << "Importing new tip " << tip.hash << " at height " << tip.height;
 
   UpdateBatch upd(*this);
-  InsertBlock (*this, genesis, 0);
+  InsertBlock (*this, tip, 0);
+  /* Make sure to prune any mainchain blocks before the new one, so that
+     GetLowestUnprunedHeight() matches it and there are no gaps between
+     the blocks after GetLowestUnprunedHeight.  */
+  if (tip.height > 0)
+    Prune (tip.height - 1);
   upd.Commit ();
+
+  CHECK_EQ (GetLowestUnprunedHeight (), tip.height);
+  CHECK_EQ (GetTipHeight (), tip.height);
 }
 
 bool
@@ -559,7 +565,11 @@ Chainstate::SanityCheck () const
 
   /* All branches should have continguous heights, chaining back either
      to a missing block on branch zero (after the genesis) or a block
-     of another branch.  */
+     of another branch.
+
+     Branch zero is an exception, where we tolerate missing blocks, so that
+     we can add chain tips later on without having to sync up all the
+     intermediate blocks.  */
   auto branches = PrepareRo (R"(
     SELECT DISTINCT `branch`
       FROM `blocks`
@@ -569,7 +579,10 @@ Chainstate::SanityCheck () const
     {
       const auto branch = branches.Get<uint64_t> (0);
       if (branch == 0)
-        foundMain = true;
+        {
+          foundMain = true;
+          continue;
+        }
 
       stmt = PrepareRo (R"(
         SELECT `hash`, `parent`, `height`
@@ -602,10 +615,9 @@ Chainstate::SanityCheck () const
           expectedParent = parent;
         }
 
-      /* If this was branch zero, it should end at an unknown / non-existant
-         block.  If this was another branch, it should end at a block of
-         a different branch, or at a pruned block (missing and before the
-         last unpruned height).  */
+      /* All branches apart from zero (which is already exluded here) should
+         end at a block of a different branch, or at a pruned block (missing
+         and before the last unpruned height) assumed to be on main chain.  */
       stmt = PrepareRo (R"(
         SELECT `branch`, `height`
           FROM `blocks`
@@ -613,10 +625,7 @@ Chainstate::SanityCheck () const
       )");
       stmt.Bind (1, expectedParent);
 
-      if (branch == 0)
-        CHECK (!stmt.Step ())
-            << "Main branch chains to existing block " << expectedParent;
-      else if (!stmt.Step ())
+      if (!stmt.Step ())
         {
           CHECK_LE (lastHeight, GetLowestUnprunedHeight ())
               << "Branch " << branch

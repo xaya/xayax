@@ -121,7 +121,7 @@ Sync::RetrieveGenesis (std::vector<BlockData>& blocks)
   const auto& blk = blocks.front ();
   CHECK_EQ (blk.hash, genesisHash) << "Mismatch in genesis hash";
 
-  chain.Initialise (blk);
+  chain.ImportTip (blk);
   LOG (INFO)
       << "Retrieved genesis block " << genesisHash << " from the base chain";
   return true;

@@ -105,7 +105,7 @@ TestBaseChain::SetGenesis (const BlockData& blk)
   std::lock_guard<std::mutex> lock(mut);
 
   blocks[blk.hash] = blk;
-  chain.Initialise (blk);
+  chain.ImportTip (blk);
 
   cvNewTip.notify_all ();
 

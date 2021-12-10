@@ -65,7 +65,7 @@ public:
 
   /**
    * Returns the block height of the best chain.  If there is no block
-   * set yet (not even a genesis block), returns -1.
+   * set yet at all, returns -1.
    */
   int64_t GetTipHeight () const;
 
@@ -90,10 +90,17 @@ public:
   bool GetHeightForHash (const std::string& hash, uint64_t& height) const;
 
   /**
-   * Initialises the chain state by importing the genesis block.  This
-   * clears all other data (if any).
+   * Imports the given block as new tip.  This is mainly used for initialisation
+   * with the very first block, but can be done also later on as long as the
+   * new block has larger height than the current tip, as well as all branches
+   * have been resolved properly before.  In other words, the current tip
+   * must be an ancestor of the imported block, although that cannot be
+   * verified.
+   *
+   * This always prunes every mainchain block before the imported one, so that
+   * both GetLowestUnprunedHeight() and GetTipHeight() match the new tip.
    */
-  void Initialise (const BlockData& genesis);
+  void ImportTip (const BlockData& tip);
 
   /**
    * Attaches a new block as best tip.  If the tip cannot be attached (because

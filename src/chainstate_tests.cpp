@@ -71,7 +71,7 @@ protected:
 
   /**
    * Generates a new genesis block with the given height, sets it
-   * with Initialise and returns the block's hash.
+   * as tip and returns the block's hash.
    */
   std::string
   SetGenesis (const uint64_t height)
@@ -83,7 +83,7 @@ protected:
 
     blocks.emplace (res.hash, res);
 
-    state.Initialise (res);
+    state.ImportTip (res);
 
     return res.hash;
   }
@@ -218,30 +218,6 @@ TEST_F (ChainstateTests, SettingOldBlockAsTip)
   EXPECT_EQ (state.GetTipHeight (), 13);
 }
 
-TEST_F (ChainstateTests, Reinitialisation)
-{
-  const auto genesis1 = SetGenesis (10);
-  const auto a = AddBlock (genesis1);
-  const auto b = AddBlock (a);
-
-  const auto genesis2 = SetGenesis (11);
-
-  EXPECT_EQ (state.GetTipHeight (), 11);
-
-  std::string hash;
-  EXPECT_FALSE (state.GetHashForHeight (10, hash));
-  EXPECT_FALSE (state.GetHashForHeight (12, hash));
-  ASSERT_TRUE (state.GetHashForHeight (11, hash));
-  EXPECT_EQ (hash, genesis2);
-
-  uint64_t height;
-  EXPECT_FALSE (state.GetHeightForHash (genesis1, height));
-  EXPECT_FALSE (state.GetHeightForHash (a, height));
-  EXPECT_FALSE (state.GetHeightForHash (b, height));
-  ASSERT_TRUE (state.GetHeightForHash (genesis2, height));
-  EXPECT_EQ (height, 11);
-}
-
 TEST_F (ChainstateTests, InvalidAttach)
 {
   /* AddBlock expects a result to be in our block map for the parent, so it can
@@ -330,6 +306,41 @@ TEST_F (ChainstateTests, ForkBranch)
 
   ASSERT_TRUE (state.GetForkBranch (e, branch));
   EXPECT_THAT (branch, ElementsAre (GetBlock (e), GetBlock (b), GetBlock (a)));
+}
+
+TEST_F (ChainstateTests, ReimportedTip)
+{
+  const auto genesis = SetGenesis (10);
+  const auto a = AddBlock (genesis);
+  const auto b = AddBlock (a);
+  const auto c = AddBlock (b);
+
+  /* Mark b/c as a branch, while genesis/a stay on the main chain.  Later we
+     reimport another tip, which is assumed to be a descendant of a at a later
+     height.  We can then continue to attach to that new tip without having
+     to import all the blocks leading back to a.  The branch can still be
+     retrieved properly.  */
+
+  std::string oldTip;
+  ASSERT_TRUE (state.SetTip (GetBlock (a), oldTip));
+
+  const auto newGenesis = SetGenesis (100);
+  const auto d = AddBlock (newGenesis);
+
+  EXPECT_EQ (state.GetTipHeight (), 101);
+
+  uint64_t height;
+  /* Reimporting a new tip will automatically prune everything before.  */
+  EXPECT_FALSE (state.GetHeightForHash (genesis, height));
+  EXPECT_FALSE (state.GetHeightForHash (a, height));
+  EXPECT_TRUE (state.GetHeightForHash (b, height));
+  EXPECT_TRUE (state.GetHeightForHash (c, height));
+  EXPECT_TRUE (state.GetHeightForHash (newGenesis, height));
+  EXPECT_TRUE (state.GetHeightForHash (d, height));
+
+  std::vector<BlockData> branch;
+  ASSERT_TRUE (state.GetForkBranch (c, branch));
+  EXPECT_THAT (branch, ElementsAre (GetBlock (c), GetBlock (b)));
 }
 
 TEST_F (ChainstateTests, ExtraDataAndPruning)
