@@ -46,11 +46,14 @@ private:
   /** Mutex for the chainstate.  */
   std::mutex& mutChain;
 
-  /** Hash of the genesis block we want to use.  */
-  const std::string genesisHash;
-
-  /** Height of the genesis block we want to use.  */
-  const uint64_t genesisHeight;
+  /**
+   * The pruning depth the sync should ensure.  This is used when the initial
+   * block is loaded, and when we re-import a new tip after getting
+   * far behind.  In those situations, we query the base chain for its
+   * current tip height, and then import the block behind this tip by
+   * the pruning depth as a start.
+   */
+  const uint64_t pruningDepth;
 
   /** Mutex for this instance / the condition variable for notifications.  */
   std::mutex mut;
@@ -97,12 +100,12 @@ private:
   void IncreaseNumBlocks ();
 
   /**
-   * Tries to retrieve the genesis block from the base chain and set
-   * it in our chainstate.  Returns true on success and false if we failed
-   * to get the block.  The genesis block (if any) will be stored in the
-   * vector of blocks.
+   * Tries to retrieve the block at given height from the base chain and import
+   * it as new tip in the chain state.  Returns true on success and false if
+   * we failed to get the block.  The genesis block (if any) will be stored in
+   * the vector of blocks.
    */
-  bool RetrieveGenesis (std::vector<BlockData>& blocks);
+  bool RetrieveNewTip (uint64_t height, std::vector<BlockData>& blocks);
 
   /**
    * Runs a single update step.  This checks the state of our chain vs
@@ -116,8 +119,7 @@ private:
 
 public:
 
-  explicit Sync (BaseChain& b, Chainstate& c, std::mutex& mutC,
-                 const std::string& genHash, uint64_t genHeight);
+  explicit Sync (BaseChain& b, Chainstate& c, std::mutex& mutC, uint64_t pd);
   ~Sync ();
 
   /**
@@ -151,8 +153,9 @@ public:
 
   /**
    * Invoked when the current tip of the chainstate managed by a Sync instance
-   * is updated.  The old tip is passed in as well.  When the genesis block is
-   * first set, oldTip will be passed as "".
+   * is updated.  The old tip is passed in as well.  When a new tip is directly
+   * imported (e.g. the very first one, or for a fast catch-up), oldTip
+   * will be passed as "".
    *
    * When the callback is invoked, the chain mutex is already locked,
    * so that the callback processing can be atomic in the chainstate

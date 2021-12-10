@@ -92,7 +92,7 @@ protected:
   const BlockData genesis;
 
   ControllerTests ()
-    : genesis(base.NewGenesis (10))
+    : genesis(base.NewGenesis (0))
   {
     dataDir = std::tmpnam (nullptr);
     LOG (INFO) << "Using temporary data directory: " << dataDir;
@@ -177,7 +177,6 @@ public:
   TestController (ControllerTests& tc)
     : Controller(tc.base, tc.dataDir.string ())
   {
-    SetGenesis (tc.genesis.hash, tc.genesis.height);
     SetZmqEndpoint (ZMQ_ADDR);
     SetRpcBinding (RPC_PORT, true);
     EnableSanityChecks ();
@@ -472,8 +471,6 @@ TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
 
   EXPECT_EQ (rpc.getblockhash (genesis.height), genesis.hash);
   EXPECT_EQ (rpc.getblockhash (a.height), b.hash);
-  EXPECT_THROW (rpc.getblockhash (genesis.height - 1),
-                jsonrpc::JsonRpcException);
   EXPECT_THROW (rpc.getblockhash (a.height + 1), jsonrpc::JsonRpcException);
 
   const auto hdr = rpc.getblockheader (a.hash);
@@ -597,17 +594,6 @@ TEST_F (ControllerSendUpdatesTests, DetachAndAttach)
     "detach": 1
   })"));
   ExpectZmq ({a}, {b, c}, upd["reqtoken"].asString ());
-}
-
-TEST_F (ControllerSendUpdatesTests, FromGenesis)
-{
-  const auto upd = rpc.game_sendupdates ("", GAME_ID);
-  EXPECT_EQ (upd["toblock"], c.hash);
-  EXPECT_EQ (upd["steps"], ParseJson (R"({
-    "attach": 3,
-    "detach": 0
-  })"));
-  ExpectZmq ({}, {genesis, b, c}, upd["reqtoken"].asString ());
 }
 
 TEST_F (ControllerSendUpdatesTests, ChainMismatch)

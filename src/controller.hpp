@@ -34,11 +34,6 @@ private:
   /** Folder for the data directory with local state.  */
   const std::string dataDir;
 
-  /** Hash for the genesis block we use.  */
-  std::string genesisHash;
-  /** Height for our genesis block.  */
-  uint64_t genesisHeight;
-
   /**
    * Set to true if pending tracking is enabled and the base chain supports it.
    */
@@ -107,11 +102,6 @@ public:
   explicit Controller (BaseChain& bc, const std::string& dir);
 
   virtual ~Controller ();
-
-  /**
-   * Configures the genesis block we want to use in the local chain state.
-   */
-  void SetGenesis (const std::string& hash, uint64_t height);
 
   /**
    * Sets up the endpoint where the ZMQ interface should connect.

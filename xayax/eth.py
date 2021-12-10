@@ -116,7 +116,6 @@ class Instance:
     args.append ("--port=%d" % self.port)
     args.append ("--zmq_address=tcp://127.0.0.1:%d" % self.zmqPort)
     args.append ("--datadir=%s" % self.datadir)
-    args.append ("--genesis_height=0")
     args.append ("--sanity_checks")
     envVars = dict (os.environ)
     envVars["GLOG_log_dir"] = self.datadir

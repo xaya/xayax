@@ -31,10 +31,8 @@ constexpr auto WAIT_BETWEEN_STEPS = std::chrono::milliseconds (1);
 
 } // anonymous namespace
 
-Sync::Sync (BaseChain& b, Chainstate& c, std::mutex& mutC,
-            const std::string& genHash, const uint64_t genHeight)
-  : base(b), chain(c), mutChain(mutC),
-    genesisHash(genHash), genesisHeight(genHeight)
+Sync::Sync (BaseChain& b, Chainstate& c, std::mutex& mutC, const uint64_t pd)
+  : base(b), chain(c), mutChain(mutC), pruningDepth(pd)
 {}
 
 Sync::~Sync ()
@@ -106,24 +104,22 @@ Sync::IncreaseNumBlocks ()
 }
 
 bool
-Sync::RetrieveGenesis (std::vector<BlockData>& blocks)
+Sync::RetrieveNewTip (const uint64_t height, std::vector<BlockData>& blocks)
 {
-  blocks = base.GetBlockRange (genesisHeight, 1);
+  blocks = base.GetBlockRange (height, 1);
   if (blocks.empty ())
     {
       LOG (WARNING)
-          << "Failed to get genesis block at height " << genesisHeight
+          << "Failed to get block at height " << height
           << " from the base chain";
       return false;
     }
 
   CHECK_EQ (blocks.size (), 1);
   const auto& blk = blocks.front ();
-  CHECK_EQ (blk.hash, genesisHash) << "Mismatch in genesis hash";
 
   chain.ImportTip (blk);
-  LOG (INFO)
-      << "Retrieved genesis block " << genesisHash << " from the base chain";
+  LOG (INFO) << "Imported new tip " << blk.hash << " from the base chain";
   return true;
 }
 
@@ -138,8 +134,12 @@ Sync::UpdateStep ()
       const int64_t tipHeight = chain.GetTipHeight ();
       if (tipHeight == -1)
         {
+          const uint64_t baseTip = base.GetTipHeight ();
+          const uint64_t genesisHeight
+              = (baseTip < pruningDepth ? 0 : baseTip - pruningDepth);
+
           std::vector<BlockData> blocks;
-          if (!RetrieveGenesis (blocks))
+          if (!RetrieveNewTip (genesisHeight, blocks))
             return false;
 
           Callbacks* cbCopy = cb;

@@ -389,7 +389,7 @@ Controller::RunData::RunData (Controller& p, const std::string& dbFile)
   parent.run = this;
 
   sync = std::make_unique<Sync> (parent.base, chain, mutChain,
-                                 parent.genesisHash, parent.genesisHeight);
+                                 parent.maxReorgDepth);
 
   for (const auto& g : parent.trackedGames)
     zmq.TrackGame (g);
@@ -454,7 +454,6 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
 
   CHECK_GE (parent.maxReorgDepth, 0);
   const auto tipHeight = chain.GetTipHeight ();
-  CHECK_GE (tipHeight, parent.genesisHeight);
   if (tipHeight > parent.maxReorgDepth + 1)
     chain.Prune (tipHeight - parent.maxReorgDepth - 1);
 }
@@ -467,9 +466,20 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
                                     std::vector<BlockData>& detach,
                                     std::vector<BlockData>& queriedAttach)
 {
+  /* If this is a sequence of the very first blocks / blocks re-imported
+     not matching up to the current chain, just push the attach blocks.  */
+  if (from.empty ())
+    {
+      LOG_IF (WARNING, attaches.empty ())
+          << "Requested ZMQ blocks without explicit from and no attaches";
+      for (const auto& blk : attaches)
+        zmq.SendBlockAttach (blk, reqtoken);
+      return;
+    }
+
   detach.clear ();
   int64_t mainchainHeight = -1;
-  if (!from.empty () && !chain.GetForkBranch (from, detach))
+  if (!chain.GetForkBranch (from, detach))
     {
       /* The block is not known, which most likely means that it is
          an old main chain block that was pruned.  */
@@ -493,16 +503,9 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
   /* Find the height starting from which we need to send attach blocks from
      the main chain.  */
   uint64_t forkHeight;
-  if (from.empty ())
-    {
-      /* This is the very first attach, starting from the genesis.  */
-      CHECK (detach.empty ());
-      forkHeight = parent.genesisHeight;
-    }
-  else if (mainchainHeight != -1)
+  if (mainchainHeight != -1)
     {
       /* The fork is going back to a pruned block on main chain.  */
-      CHECK_GE (mainchainHeight, parent.genesisHeight);
       forkHeight = mainchainHeight + 1;
     }
   else if (detach.empty ())
@@ -536,9 +539,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
           if (blk.height == forkHeight)
             {
               foundForkPoint = true;
-              if (from.empty ())
-                CHECK_EQ (blk.hash, parent.genesisHash);
-              else if (detach.empty ())
+              if (detach.empty ())
                 CHECK_EQ (blk.parent, from);
               else
                 CHECK_EQ (blk.parent, detach.back ().parent);
@@ -565,9 +566,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
      The GSP's logic for recovering from missed ZMQ notifications takes care
      of that.  */
   bool mismatch;
-  if (from.empty ())
-    mismatch = (queriedAttach.front ().hash != parent.genesisHash);
-  else if (detach.empty ())
+  if (detach.empty ())
     mismatch = (queriedAttach.front ().parent != from);
   else
     mismatch = (queriedAttach.front ().parent != detach.back ().parent);
@@ -612,15 +611,6 @@ Controller::~Controller ()
 {
   std::lock_guard<std::mutex> lock(mut);
   CHECK (run == nullptr) << "Instance is still running";
-}
-
-void
-Controller::SetGenesis (const std::string& hash, const uint64_t height)
-{
-  std::lock_guard<std::mutex> lock(mut);
-  CHECK (run == nullptr) << "Instance is already running";
-  genesisHash = hash;
-  genesisHeight = height;
 }
 
 void

@@ -30,8 +30,6 @@ DEFINE_bool (listen_locally, true,
 DEFINE_string (zmq_address, "",
                "the address to bind the ZMQ publisher to");
 
-DEFINE_int64 (genesis_height, -1,
-               "height from which to start the local chain state");
 DEFINE_int32 (max_reorg_depth, 1'000,
               "maximum supported depth of reorgs");
 
@@ -61,8 +59,6 @@ main (int argc, char* argv[])
         throw std::runtime_error ("--zmq_address must be set");
       if (FLAGS_datadir.empty ())
         throw std::runtime_error ("--datadir must be set");
-      if (FLAGS_genesis_height == -1)
-        throw std::runtime_error ("--genesis_height must be set");
       if (FLAGS_max_reorg_depth < 0)
         throw std::runtime_error ("--max_reorg_depth must not be negative");
 
@@ -70,17 +66,7 @@ main (int argc, char* argv[])
       base.Start ();
 
       xayax::Controller controller(base, FLAGS_datadir);
-
-      /* We use the genesis height passed and determine the associated
-         block hash.  The height must be already deeply confirmed, so it
-         will not be reorged any more.  */
-      const auto genesis = base.GetBlockRange (FLAGS_genesis_height, 1);
-      if (genesis.size () != 1)
-        throw std::runtime_error ("Genesis block is not yet on the base chain");
-      LOG (INFO) << "Using block " << genesis[0].hash << " as genesis block";
-      controller.SetGenesis (genesis[0].hash, FLAGS_genesis_height);
       controller.SetMaxReorgDepth (FLAGS_max_reorg_depth);
-
       controller.SetZmqEndpoint (FLAGS_zmq_address);
       controller.SetRpcBinding (FLAGS_port, FLAGS_listen_locally);
       if (FLAGS_pending_moves)
