@@ -11,9 +11,12 @@ Tests requests for blocks that have been pruned.
 
 import coretest
 
+from xayax import core
 from xayax.testcase import ZmqSubscriber
 
 import jsonrpclib
+
+import time
 
 
 class PruningFixture (coretest.Fixture):
@@ -24,6 +27,21 @@ class PruningFixture (coretest.Fixture):
 
   def getXayaXExtraArgs (self):
     return ["--max_reorg_depth=%d" % self.maxReorgDepth]
+
+
+def waitForBlock (f, xcore, blk):
+  """
+  Waits until the given Xaya X Core instance is synced up to the
+  given block as best tip.
+  """
+
+  f.log.info ("Waiting for best block %s on Xaya X..." % blk)
+  rpc = xcore.createRpc ()
+  while True:
+    info = rpc.getblockchaininfo ()
+    if info["bestblockhash"] == blk:
+      return
+    time.sleep (0.01)
 
 
 if __name__ == "__main__":
@@ -41,6 +59,14 @@ if __name__ == "__main__":
 
       branch1 = f.generate (5)
       f.assertZmqBlocks (sub, "attach", branch1)
+
+      # Start a second Xaya X instance, which will quick-sync to the
+      # branch and then be stopped again.
+      xcoreCmd = [f.getXCoreBinary (), "--max_reorg_depth=5"]
+      secondXCore = core.Instance (f.basedir, f.portgen, xcoreCmd,
+                                   dirname="xayax-core-2")
+      with secondXCore.run (f.env.xayanode.rpcurl):
+        waitForBlock (f, secondXCore, branch1[-1])
 
       rpc.invalidateblock (branch1[0])
       branch2 = f.generate (20)
@@ -72,3 +98,23 @@ if __name__ == "__main__":
       })
       f.assertEqual (data["toblock"], branch2[-1])
       f.assertZmqBlocks (sub, "attach", branch2[10:], reqtoken=data["reqtoken"])
+
+      # Start the second instance again to make sure it can correctly
+      # catch up, and then also supply the blocks from the previous fork
+      # back to the new tip.
+      with secondXCore.run (f.env.xayanode.rpcurl):
+        waitForBlock (f, secondXCore, branch2[-1])
+        sub2 = ZmqSubscriber (f.zmqCtx, secondXCore.rpcurl, "game")
+        sub2.subscribe ("game-block-attach")
+        sub2.subscribe ("game-block-detach")
+        with sub2.run ():
+          xrpc2 = secondXCore.createRpc ()
+          data = xrpc2.game_sendupdates (gameid="game", fromblock=branch1[-1])
+          f.assertEqual (data["steps"], {
+            "detach": 5,
+            "attach": 20,
+          })
+          f.assertEqual (data["toblock"], branch2[-1])
+          f.assertZmqBlocks (sub2, "detach", branch1[::-1],
+                             reqtoken=data["reqtoken"])
+          f.assertZmqBlocks (sub2, "attach", branch2, reqtoken=data["reqtoken"])

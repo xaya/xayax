@@ -28,7 +28,7 @@ class Instance:
   most likely be used.
   """
 
-  def __init__ (self, basedir, portgen, binary):
+  def __init__ (self, basedir, portgen, binary, dirname="xayax-core"):
     """
     Initialises / configures a fresh instance without starting it.
     portgen should be a generator that yields free ports for using
@@ -36,7 +36,7 @@ class Instance:
     """
 
     self.log = logging.getLogger ("xayax.core")
-    self.datadir = os.path.join (basedir, "xayax-core")
+    self.datadir = os.path.join (basedir, dirname)
     self.binary = binary
 
     self.port = next (portgen)
