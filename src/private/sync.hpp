@@ -102,10 +102,9 @@ private:
   /**
    * Tries to retrieve the block at given height from the base chain and import
    * it as new tip in the chain state.  Returns true on success and false if
-   * we failed to get the block.  The genesis block (if any) will be stored in
-   * the vector of blocks.
+   * we failed to get the block.
    */
-  bool RetrieveNewTip (uint64_t height, std::vector<BlockData>& blocks);
+  bool ImportNewTip (uint64_t height);
 
   /**
    * Runs a single update step.  This checks the state of our chain vs

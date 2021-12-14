@@ -326,12 +326,21 @@ Chainstate::ImportTip (const BlockData& tip)
       << "Importing new tip " << tip.hash << " at height " << tip.height;
 
   UpdateBatch upd(*this);
-  InsertBlock (*this, tip, 0);
+
+  /* If we already have the block in the database, just mark it as tip.
+     Otherwise insert it as new block.  */
+  uint64_t height;
+  if (GetHeightForHash (tip.hash, height))
+    MarkAsTip (*this, *this, tip);
+  else
+    InsertBlock (*this, tip, 0);
+
   /* Make sure to prune any mainchain blocks before the new one, so that
      GetLowestUnprunedHeight() matches it and there are no gaps between
      the blocks after GetLowestUnprunedHeight.  */
   if (tip.height > 0)
     Prune (tip.height - 1);
+
   upd.Commit ();
 
   CHECK_EQ (GetLowestUnprunedHeight (), tip.height);

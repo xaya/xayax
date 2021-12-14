@@ -376,6 +376,14 @@ TestZmqSubscriber::AwaitMessages (const std::string& cmd, const size_t num)
   return res;
 }
 
+void
+TestZmqSubscriber::ForgetAll ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  messages.clear ();
+  VLOG (1) << "Forgot all received and not yet expected messages";
+}
+
 /* ************************************************************************** */
 
 } // namespace xayax

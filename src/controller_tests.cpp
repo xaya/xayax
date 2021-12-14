@@ -134,6 +134,12 @@ protected:
                   const std::string& reqtoken = "");
 
   /**
+   * Waits for the ZMQ attach message of the given block, ignoring all
+   * before that.
+   */
+  void WaitForZmqTip (const BlockData& tip);
+
+  /**
    * Awaits n pending ZMQ messages and returns them.
    */
   std::vector<Json::Value> AwaitPending (size_t num);
@@ -262,6 +268,25 @@ ControllerTests::ExpectZmq (const std::vector<BlockData>& detach,
     {
       ASSERT_EQ (actual[i]["block"]["hash"], attach[i].hash);
       ASSERT_EQ (actual[i]["reqtoken"].asString (), reqtoken);
+    }
+}
+
+void
+ControllerTests::WaitForZmqTip (const BlockData& tip)
+{
+  while (true)
+    {
+      const auto attaches
+          = controller->sub->AwaitMessages ("game-block-attach json " + GAME_ID,
+                                            1);
+      CHECK_EQ (attaches.size (), 1);
+      const auto& msg = attaches.front ();
+      ASSERT_EQ (msg["reqtoken"].asString (), "");
+      if (msg["block"]["hash"].asString () == tip.hash)
+        {
+          controller->sub->ForgetAll ();
+          return;
+        }
     }
 }
 
@@ -395,7 +420,7 @@ protected:
   ControllerRpcTests ()
     : httpClient(GetRpcEndpoint ()), rpc(httpClient)
   {
-    ExpectZmq ({}, {genesis});
+    WaitForZmqTip (genesis);
   }
 
 };
@@ -449,7 +474,7 @@ TEST_F (ControllerRpcTests, GetNetworkInfo)
 TEST_F (ControllerRpcTests, GetBlockchainInfo)
 {
   const auto a = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {a});
+  WaitForZmqTip (a);
 
   /* The first call to getblockchaininfo will cache the chain.  */
   base.SetChain ("foo");
@@ -465,9 +490,9 @@ TEST_F (ControllerRpcTests, GetBlockchainInfo)
 TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
 {
   const auto a = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {a});
+  WaitForZmqTip (a);
   const auto b = base.SetTip (base.NewBlock (genesis.hash));
-  ExpectZmq ({a}, {b});
+  WaitForZmqTip (b);
 
   EXPECT_EQ (rpc.getblockhash (genesis.height), genesis.hash);
   EXPECT_EQ (rpc.getblockhash (a.height), b.hash);
@@ -484,7 +509,7 @@ TEST_F (ControllerRpcTests, Pending)
   /* We need to add a first block to get the PendingManager into synced
      state and make sure it will forward messages.  */
   const auto blk = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {blk});
+  WaitForZmqTip (blk);
 
   EXPECT_EQ (rpc.getrawmempool (), ParseJson ("[]"));
 
@@ -542,10 +567,10 @@ protected:
   ControllerSendUpdatesTests ()
   {
     a = base.SetTip (base.NewBlock ());
-    ExpectZmq ({}, {a});
+    WaitForZmqTip (a);
     b = base.SetTip (base.NewBlock (genesis.hash));
     c = base.SetTip (base.NewBlock ());
-    ExpectZmq ({a}, {b, c});
+    WaitForZmqTip (c);
   }
 
 };
@@ -607,7 +632,7 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
   */
 
   const auto d = base.SetTip (base.NewBlock (b.hash));
-  ExpectZmq ({c}, {d});
+  WaitForZmqTip (d);
   DisableSync ();
 
   /* If we reorg back to a, then the fork point according to the local
@@ -639,15 +664,15 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
 TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
 {
   /* genesis - b - c - d
-            |  \ - branch0 - branch1 - branch2
+            |  \ - branch0 - ... - branch4
              \ a
   */
 
   Restart (2);
   const auto d = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {d});
+  WaitForZmqTip (d);
   const auto branch = base.AttachBranch (b.hash, 5);
-  ExpectZmq ({d, c}, branch);
+  WaitForZmqTip (branch.back ());
 
   auto upd = rpc.game_sendupdates (d.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], branch.back ().hash);

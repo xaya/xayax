@@ -343,6 +343,24 @@ TEST_F (ChainstateTests, ReimportedTip)
   EXPECT_THAT (branch, ElementsAre (GetBlock (c), GetBlock (b)));
 }
 
+TEST_F (ChainstateTests, ImportingExistingTip)
+{
+  const auto genesis = SetGenesis (10);
+  const auto a = AddBlock (genesis);
+  const auto b = AddBlock (a);
+
+  /* We revert back to a as tip, and then import b.  This should work
+     fine, without running into UNIQUE constraint violations in the database
+     (for instance).  */
+
+  std::string oldTip;
+  ASSERT_TRUE (state.SetTip (GetBlock (a), oldTip));
+  state.ImportTip (GetBlock (b));
+
+  EXPECT_EQ (state.GetTipHeight (), 12);
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), 12);
+}
+
 TEST_F (ChainstateTests, ExtraDataAndPruning)
 {
   const auto genesis = SetGenesis (10);

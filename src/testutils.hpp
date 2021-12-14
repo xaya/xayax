@@ -207,6 +207,11 @@ public:
    */
   std::vector<Json::Value> AwaitMessages (const std::string& cmd, size_t num);
 
+  /**
+   * Forgets / ignores all unexpected messages.
+   */
+  void ForgetAll ();
+
 };
 
 } // namespace xayax

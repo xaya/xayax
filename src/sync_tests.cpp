@@ -10,6 +10,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -101,7 +102,10 @@ public:
   TipUpdatedFrom (const std::string& oldTip,
                   const std::vector<BlockData>& attaches) override
   {
-    CHECK_EQ (oldTip, currentTip);
+    /* Make sure we handle the situation of a fast-sync correctly, where
+       oldTip will be set as "" when we just reimported a new tip.  */
+    if (!oldTip.empty ())
+      CHECK_EQ (oldTip, currentTip);
     currentTip = GetCurrentTip (chain);
 
     /* Verify that the block attaches make sense with respect to the
@@ -234,11 +238,39 @@ TEST_F (SyncTests, BasicSyncing)
 
   StopSync ();
   const auto branch = base.AttachBranch (blk.hash, 10);
-  StartSync (0);
+  /* We don't want fast catchup in this test, it should just sync normally.  */
+  StartSync (100);
   cb.WaitForTip (branch.back ().hash);
 
   const auto end = Clock::now ();
   EXPECT_LT (end - start, std::chrono::seconds (1)) << "Sync should not block";
+}
+
+TEST_F (SyncTests, FastCatchup)
+{
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+  const auto branch1 = base.AttachBranch (genesis.hash, 5);
+
+  StartSync (5);
+  cb.WaitForTip (branch1.back ().hash);
+  StopSync ();
+
+  const auto branch2 = base.AttachBranch (genesis.hash, 20);
+  StartSync (5);
+  cb.WaitForTip (branch2.back ().hash);
+
+  ReadChainstate ([&] (const Chainstate& chain)
+    {
+      EXPECT_EQ (chain.GetLowestUnprunedHeight (), 15);
+      EXPECT_EQ (chain.GetTipHeight (), 20);
+
+      std::vector<BlockData> detaches;
+      CHECK (chain.GetForkBranch (branch1.back ().hash, detaches));
+
+      auto expected = branch1;
+      std::reverse (expected.begin (), expected.end ());
+      EXPECT_EQ (detaches, expected);
+    });
 }
 
 TEST_F (SyncTests, DiscoversNewBlocks)
