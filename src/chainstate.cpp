@@ -31,11 +31,6 @@ SetupSchema (Database& db)
       -- for other branches, the integer indicates the branch.
       `branch` INTEGER NOT NULL,
 
-      -- Set to true if the move data and extra data for this block have
-      -- been pruned.  In this case, the block must be on the main chain
-      -- and must never end up on a branch in the future.
-      `pruned` INTEGER NOT NULL,
-
       -- The RNG seed as hex string.
       `rngseed` TEXT NOT NULL,
 
@@ -46,9 +41,6 @@ SetupSchema (Database& db)
       UNIQUE (`branch`, `height`)
 
     );
-
-    CREATE INDEX IF NOT EXISTS `blocks_by_pruned`
-        ON `blocks` (`pruned`, `branch`, `height`);
 
     -- Data of moves for blocks that have not been pruned yet.
     CREATE TABLE IF NOT EXISTS `moves` (
@@ -86,6 +78,29 @@ SetupSchema (Database& db)
 }
 
 /**
+ * Queries for the lowest or highest mainchain block number.
+ */
+int64_t
+GetMainchainHeight (const Database& db, const std::string& order)
+{
+  auto stmt = db.PrepareRo (R"(
+    SELECT `height`
+      FROM `blocks`
+      WHERE `branch` = 0
+      ORDER BY `height` )" + order + R"(
+      LIMIT 1
+  )");
+
+  if (!stmt.Step ())
+    return -1;
+
+  const auto res = stmt.Get<int64_t> (0);
+  CHECK (!stmt.Step ());
+
+  return res;
+}
+
+/**
  * Inserts a block into the database.
  */
 void
@@ -93,8 +108,8 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
 {
   auto stmt = db.Prepare (R"(
     INSERT INTO `blocks`
-      (`hash`, `parent`, `height`, `branch`, `pruned`, `rngseed`, `metadata`)
-      VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)
+      (`hash`, `parent`, `height`, `branch`, `rngseed`, `metadata`)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
   )");
   stmt.Bind (1, blk.hash);
   stmt.Bind (2, blk.parent);
@@ -252,21 +267,13 @@ Chainstate::SetChain (const std::string& chain)
 int64_t
 Chainstate::GetTipHeight () const
 {
-  auto stmt = PrepareRo (R"(
-    SELECT `height`
-      FROM `blocks`
-      WHERE `branch` = 0
-      ORDER BY `height` DESC
-      LIMIT 1
-  )");
+  return GetMainchainHeight (*this, "DESC");
+}
 
-  if (!stmt.Step ())
-    return -1;
-
-  const auto res = stmt.Get<int64_t> (0);
-  CHECK (!stmt.Step ());
-
-  return res;
+int64_t
+Chainstate::GetLowestUnprunedHeight () const
+{
+  return GetMainchainHeight (*this, "ASC");
 }
 
 bool
@@ -308,21 +315,36 @@ Chainstate::GetHeightForHash (const std::string& hash, uint64_t& height) const
 }
 
 void
-Chainstate::Initialise (const BlockData& genesis)
+Chainstate::ImportTip (const BlockData& tip)
 {
-  LOG (INFO)
-      << "Initialising chainstate with genesis block "
-      << genesis.hash << " at height " << genesis.height;
+  const int64_t oldTip = GetTipHeight ();
+  if (oldTip != -1)
+    CHECK_LT (oldTip, tip.height)
+        << "Imported block should have larger height as current tip";
 
-  Execute (R"(
-    DROP TABLE `blocks`;
-    DROP TABLE `moves`;
-  )");
-  SetupSchema (*this);
+  LOG (INFO)
+      << "Importing new tip " << tip.hash << " at height " << tip.height;
 
   UpdateBatch upd(*this);
-  InsertBlock (*this, genesis, 0);
+
+  /* If we already have the block in the database, just mark it as tip.
+     Otherwise insert it as new block.  */
+  uint64_t height;
+  if (GetHeightForHash (tip.hash, height))
+    MarkAsTip (*this, *this, tip);
+  else
+    InsertBlock (*this, tip, 0);
+
+  /* Make sure to prune any mainchain blocks before the new one, so that
+     GetLowestUnprunedHeight() matches it and there are no gaps between
+     the blocks after GetLowestUnprunedHeight.  */
+  if (tip.height > 0)
+    Prune (tip.height - 1);
+
   upd.Commit ();
+
+  CHECK_EQ (GetLowestUnprunedHeight (), tip.height);
+  CHECK_EQ (GetTipHeight (), tip.height);
 }
 
 bool
@@ -424,13 +446,12 @@ Chainstate::GetForkBranch (const std::string& hash,
 
       if (!stmt.Step ())
         {
-          /* The block is not known.  This is fine if it was an initial
-             request, but should not happen if we already are iterating
-             a parent branch of the originally requested block.  */
-          CHECK (branch.empty ())
-              << "Parent block " << curHash
-              << " of existing branch is not known";
-          return false;
+          /* The block is not known.  This can mean one of two things:
+             First, if this was the initial request, it simply means that
+             we do not know that block and cannot respond.  Second, if this
+             is the parent of a previous branch, it could be that we reached
+             the main chain but those blocks have been pruned already.  */
+          return !branch.empty ();
         }
 
       const auto curBranch = stmt.Get<uint64_t> (0);
@@ -441,7 +462,7 @@ Chainstate::GetForkBranch (const std::string& hash,
         return true;
 
       stmt = PrepareRo (R"(
-        SELECT `hash`, `parent`, `height`, `rngseed`, `metadata`, `pruned`
+        SELECT `hash`, `parent`, `height`, `rngseed`, `metadata`
           FROM `blocks`
           WHERE `branch` = ?1 AND `height` <= ?2
           ORDER BY `height` DESC
@@ -452,9 +473,6 @@ Chainstate::GetForkBranch (const std::string& hash,
       while (stmt.Step ())
         {
           BlockData blk;
-          CHECK_EQ (stmt.Get<int64_t> (5), 0)
-              << "Block " << blk.hash << " on branch " << curBranch
-              << " is already pruned";
           blk.hash = stmt.Get<std::string> (0);
           blk.parent = stmt.Get<std::string> (1);
           blk.height = stmt.Get<uint64_t> (2);
@@ -501,7 +519,7 @@ Chainstate::Prune (const uint64_t untilHeight)
   auto query = PrepareRo (R"(
     SELECT `hash`
       FROM `blocks`
-      WHERE (NOT `pruned`) AND `branch` = 0 AND `height` <= ?1
+      WHERE `branch` = 0 AND `height` <= ?1
   )");
   query.Bind (1, untilHeight);
 
@@ -519,21 +537,19 @@ Chainstate::Prune (const uint64_t untilHeight)
       )");
       stmt.Bind (1, hash);
       stmt.Execute ();
-
-      stmt = Prepare (R"(
-        UPDATE `blocks`
-          SET `pruned` = 1, `rngseed` = '', `metadata` = NULL
-          WHERE `hash` = ?1
-      )");
-      stmt.Bind (1, hash);
-      stmt.Execute ();
     }
+
+  auto stmt = Prepare (R"(
+    DELETE FROM `blocks`
+      WHERE `branch` = 0 AND `height` <= ?1
+  )");
+  stmt.Bind (1, untilHeight);
+  stmt.Execute ();
 
   upd.Commit ();
 
   LOG_IF (INFO, cnt > 0)
-      << "Pruned extra data for " << cnt
-      << " blocks until height " << untilHeight;
+      << "Pruned " << cnt << " blocks until height " << untilHeight;
 }
 
 void
@@ -556,19 +572,13 @@ Chainstate::SanityCheck () const
   LOG (INFO)
       << "Running sanity check with " << numBlocks << " blocks in the database";
 
-  /* Blocks not on the main chain should not be pruned.  */
-  stmt = PrepareRo (R"(
-    SELECT `hash`, `branch`
-      FROM `blocks`
-      WHERE `pruned` AND `branch` != 0
-  )");
-  CHECK (!stmt.Step ())
-      << "Block " << stmt.Get<std::string> (0)
-      << " is pruned but on branch " << stmt.Get<uint64_t> (1);
-
   /* All branches should have continguous heights, chaining back either
      to a missing block on branch zero (after the genesis) or a block
-     of another branch.  */
+     of another branch.
+
+     Branch zero is an exception, where we tolerate missing blocks, so that
+     we can add chain tips later on without having to sync up all the
+     intermediate blocks.  */
   auto branches = PrepareRo (R"(
     SELECT DISTINCT `branch`
       FROM `blocks`
@@ -578,7 +588,10 @@ Chainstate::SanityCheck () const
     {
       const auto branch = branches.Get<uint64_t> (0);
       if (branch == 0)
-        foundMain = true;
+        {
+          foundMain = true;
+          continue;
+        }
 
       stmt = PrepareRo (R"(
         SELECT `hash`, `parent`, `height`
@@ -611,9 +624,9 @@ Chainstate::SanityCheck () const
           expectedParent = parent;
         }
 
-      /* If this was branch zero, it should end at an unknown / non-existant
-         block.  If this was another branch, it should end at a block of
-         a different branch.  */
+      /* All branches apart from zero (which is already exluded here) should
+         end at a block of a different branch, or at a pruned block (missing
+         and before the last unpruned height) assumed to be on main chain.  */
       stmt = PrepareRo (R"(
         SELECT `branch`, `height`
           FROM `blocks`
@@ -621,14 +634,15 @@ Chainstate::SanityCheck () const
       )");
       stmt.Bind (1, expectedParent);
 
-      if (branch == 0)
-        CHECK (!stmt.Step ())
-            << "Main branch chains to existing block " << expectedParent;
+      if (!stmt.Step ())
+        {
+          CHECK_LE (lastHeight, GetLowestUnprunedHeight ())
+              << "Branch " << branch
+              << " chains to a non-existing block " << expectedParent
+              << " that is above pruning height";
+        }
       else
         {
-          CHECK (stmt.Step ())
-              << "Branch " << branch
-              << " chains to non-existing block " << expectedParent;
           CHECK_NE (stmt.Get<uint64_t> (0), branch)
               << "Expected end block " << expectedParent
               << " of branch " << branch << " chains back to the same branch";

@@ -417,6 +417,14 @@ CoreChain::EnablePending ()
   return true;
 }
 
+uint64_t
+CoreChain::GetTipHeight ()
+{
+  CoreRpc rpc(endpoint);
+  const auto blockchain = rpc->getblockchaininfo ();
+  return blockchain["blocks"].asUInt64 ();
+}
+
 std::vector<BlockData>
 CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {
@@ -473,6 +481,29 @@ CoreChain::GetBlockRange (const uint64_t start, const uint64_t count)
 
   std::reverse (res.begin (), res.end ());
   return res;
+}
+
+int64_t
+CoreChain::GetMainchainHeight (const std::string& hash)
+{
+  CoreRpc rpc(endpoint);
+
+  try
+    {
+      const auto data = rpc->getblockheader (hash);
+      CHECK (data.isObject ());
+      const auto conf = data["confirmations"];
+      CHECK (conf.isInt64 ());
+      if (conf.asInt64 () == -1)
+        return -1;
+      CHECK_GE (conf.asInt64 (), 0);
+      return data["height"].asUInt64 ();
+    }
+  catch (const jsonrpc::JsonRpcException& exc)
+    {
+      LOG (WARNING) << "RPC error from getblockheader: " << exc.what ();
+      return -1;
+    }
 }
 
 std::vector<std::string>

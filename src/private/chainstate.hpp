@@ -16,22 +16,20 @@ namespace xayax
 
 /**
  * Storage abstraction for the known state of the underlying blockchain.
- * This is mainly a database of all the block headers (with basic metadata)
- * that we are aware of, together with the structure they form as a tree
- * based on some genesis block (which may be a block later than the
- * actual blockchain genesis).
+ * This is mainly a database of the structure formed by blocks we are
+ * aware of as a tree.
  *
  * The tree structure allows us to handle reorgs properly, and also to determine
  * all blocks that need to be detached for an arbitrary reorg of a GSP
  * (i.e. game_sendupdates) back to the main chain.
  *
- * The database contains full move data for recent blocks as well as blocks
- * not on the main chain, as we cannot extract the move data for those
- * blocks from the base blockchain API, and they are expected by GSPs for
- * reorgs / detaching of blocks.  The number of such blocks is limited, so
- * that storing the full move data for them is not a big issue.  For blocks
- * on the main chain that are already buried deeply (so they won't end up
- * on a branch in the end), we remove that data.
+ * The database contains data (including moves) for recent blocks as well as
+ * all blocks not on the main chain, as we cannot extract the move data for
+ * those blocks from the base blockchain API, and they are expected by GSPs for
+ * reorgs / detaching of blocks.  Blocks on the main chain that are far enough
+ * behind current tip can be pruned, which removes all records of them
+ * from the database; we will then query the base chain for them whenever
+ * needed.
  *
  * Internally, each block in our database has a "branch number".  This is
  * zero for blocks on the main chain, and a larger integer for blocks on a
@@ -67,9 +65,16 @@ public:
 
   /**
    * Returns the block height of the best chain.  If there is no block
-   * set yet (not even a genesis block), returns -1.
+   * set yet at all, returns -1.
    */
   int64_t GetTipHeight () const;
+
+  /**
+   * Returns the lowest height on the mainchain that we have block data for,
+   * i.e. the lowest block not yet pruned.  This also determines how far
+   * a reorg can go back at the most.
+   */
+  int64_t GetLowestUnprunedHeight () const;
 
   /**
    * Returns the block hash corresponding to a given height in the current
@@ -85,10 +90,17 @@ public:
   bool GetHeightForHash (const std::string& hash, uint64_t& height) const;
 
   /**
-   * Initialises the chain state by importing the genesis block.  This
-   * clears all other data (if any).
+   * Imports the given block as new tip.  This is mainly used for initialisation
+   * with the very first block, but can be done also later on as long as the
+   * new block has larger height than the current tip, as well as all branches
+   * have been resolved properly before.  In other words, the current tip
+   * must be an ancestor of the imported block, although that cannot be
+   * verified.
+   *
+   * This always prunes every mainchain block before the imported one, so that
+   * both GetLowestUnprunedHeight() and GetTipHeight() match the new tip.
    */
-  void Initialise (const BlockData& genesis);
+  void ImportTip (const BlockData& tip);
 
   /**
    * Attaches a new block as best tip.  If the tip cannot be attached (because
@@ -113,9 +125,9 @@ public:
                       std::vector<BlockData>& branch) const;
 
   /**
-   * Prunes all move and extra data for blocks on the main chain with a height
-   * below the given number (i.e. asserts that those blocks will certainly
-   * not end up on a branch in the future).
+   * Prunes all data of blocks on the main chain at or below the given height.
+   * This in essence asserts that those blocks will certainly not end up on a
+   * reorg in the future.
    */
   void Prune (uint64_t untilHeight);
 

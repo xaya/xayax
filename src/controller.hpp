@@ -34,11 +34,6 @@ private:
   /** Folder for the data directory with local state.  */
   const std::string dataDir;
 
-  /** Hash for the genesis block we use.  */
-  std::string genesisHash;
-  /** Height for our genesis block.  */
-  uint64_t genesisHeight;
-
   /**
    * Set to true if pending tracking is enabled and the base chain supports it.
    */
@@ -51,10 +46,11 @@ private:
   bool sanityChecks = false;
 
   /**
-   * If set to something other than -1, pruning of move data in the
-   * chain state is enabled for blocks this far behind the tip.
+   * The maximum depth of a reorg that we support.  We only keep blocks
+   * in the main chain this far behind current tip.  Must be configured with
+   * SetMaxReorgDepth before the Controller is started.
    */
-  int pruning = -1;
+  int maxReorgDepth = -1;
 
   /** Endpoint for the ZMQ server.  */
   std::string zmqAddr;
@@ -108,11 +104,6 @@ public:
   virtual ~Controller ();
 
   /**
-   * Configures the genesis block we want to use in the local chain state.
-   */
-  void SetGenesis (const std::string& hash, uint64_t height);
-
-  /**
    * Sets up the endpoint where the ZMQ interface should connect.
    */
   void SetZmqEndpoint (const std::string& addr);
@@ -137,10 +128,12 @@ public:
   void EnableSanityChecks ();
 
   /**
-   * Turns on pruning of move data for blocks that are a certain depth
-   * behind the tip.
+   * Configures the maximum depth of a supported reorg.  This controls
+   * how many main-chain blocks are kept behind tip during operation, and
+   * where initial syncing will start.  Must be set before the Controller
+   * can be started.
    */
-  void EnablePruning (unsigned depth);
+  void SetMaxReorgDepth (unsigned depth);
 
   /**
    * Marks a given game to be tracked right upon start of the controller.

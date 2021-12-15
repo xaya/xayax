@@ -10,6 +10,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -101,7 +102,10 @@ public:
   TipUpdatedFrom (const std::string& oldTip,
                   const std::vector<BlockData>& attaches) override
   {
-    CHECK_EQ (oldTip, currentTip);
+    /* Make sure we handle the situation of a fast-sync correctly, where
+       oldTip will be set as "" when we just reimported a new tip.  */
+    if (!oldTip.empty ())
+      CHECK_EQ (oldTip, currentTip);
     currentTip = GetCurrentTip (chain);
 
     /* Verify that the block attaches make sense with respect to the
@@ -158,13 +162,13 @@ protected:
   }
 
   /**
-   * Starts our sync task, using the given block as genesis.
+   * Starts our sync task, using the given max reorg depth.
    */
   void
-  StartSync (const BlockData& gen)
+  StartSync (const uint64_t pd)
   {
     CHECK (sync == nullptr);
-    sync = std::make_unique<Sync> (base, chain, mutChain, gen.hash, gen.height);
+    sync = std::make_unique<Sync> (base, chain, mutChain, pd);
     sync->SetCallbacks (&cb);
     sync->Start ();
   }
@@ -179,32 +183,38 @@ protected:
     sync.reset ();
   }
 
+  /**
+   * Exposes the underlying Chainstate that is being synced for arbitrary
+   * read operations in tests.
+   */
+  void
+  ReadChainstate (const std::function<void (const Chainstate& c)>& fcn)
+  {
+    std::lock_guard<std::mutex> lock(mutChain);
+    fcn (chain);
+  }
+
 };
 
 /* ************************************************************************** */
 
-TEST_F (SyncTests, WaitingForGenesis)
+TEST_F (SyncTests, InitialBlock)
 {
-  BlockData blk;
-  blk.hash = "genesis";
-  blk.height = 2;
-  StartSync (blk);
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+  const auto branch = base.AttachBranch (genesis.hash, 100);
+  StartSync (10);
+  cb.WaitForTip (branch.back ().hash);
 
-  base.SetGenesis (base.NewGenesis (1));
-
-  SleepSome ();
-
-  blk = base.NewBlock ();
-  blk.hash = "genesis";
-  base.SetTip (blk);
-  sync->NewBaseChainTip ();
-
-  cb.WaitForTip ("genesis");
+  ReadChainstate ([] (const Chainstate& chain)
+    {
+      EXPECT_EQ (chain.GetLowestUnprunedHeight (), 90);
+      EXPECT_EQ (chain.GetTipHeight (), 100);
+    });
 }
 
 TEST_F (SyncTests, BasicSyncing)
 {
-  const auto genesis = base.SetGenesis (base.NewGenesis (10));
+  base.SetGenesis (base.NewGenesis (0));
   base.SetTip (base.NewBlock ());
   auto blk = base.SetTip (base.NewBlock ());
 
@@ -215,7 +225,7 @@ TEST_F (SyncTests, BasicSyncing)
   using Clock = std::chrono::steady_clock;
   const auto start = Clock::now ();
 
-  StartSync (genesis);
+  StartSync (0);
   cb.WaitForTip (blk.hash);
 
   for (unsigned i = 0; i < 10; ++i)
@@ -228,21 +238,49 @@ TEST_F (SyncTests, BasicSyncing)
 
   StopSync ();
   const auto branch = base.AttachBranch (blk.hash, 10);
-  StartSync (genesis);
+  /* We don't want fast catchup in this test, it should just sync normally.  */
+  StartSync (100);
   cb.WaitForTip (branch.back ().hash);
 
   const auto end = Clock::now ();
   EXPECT_LT (end - start, std::chrono::seconds (1)) << "Sync should not block";
 }
 
+TEST_F (SyncTests, FastCatchup)
+{
+  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+  const auto branch1 = base.AttachBranch (genesis.hash, 5);
+
+  StartSync (5);
+  cb.WaitForTip (branch1.back ().hash);
+  StopSync ();
+
+  const auto branch2 = base.AttachBranch (genesis.hash, 20);
+  StartSync (5);
+  cb.WaitForTip (branch2.back ().hash);
+
+  ReadChainstate ([&] (const Chainstate& chain)
+    {
+      EXPECT_EQ (chain.GetLowestUnprunedHeight (), 15);
+      EXPECT_EQ (chain.GetTipHeight (), 20);
+
+      std::vector<BlockData> detaches;
+      CHECK (chain.GetForkBranch (branch1.back ().hash, detaches));
+
+      auto expected = branch1;
+      std::reverse (expected.begin (), expected.end ());
+      EXPECT_EQ (detaches, expected);
+    });
+}
+
 TEST_F (SyncTests, DiscoversNewBlocks)
 {
-  auto blk = base.SetGenesis (base.NewGenesis (0));
-  StartSync (blk);
+  base.SetGenesis (base.NewGenesis (0));
+  StartSync (0);
 
   SleepSome ();
 
-  blk = base.SetTip (base.NewBlock ());
+  const auto blk = base.SetTip (base.NewBlock ());
 
   /* Even if we do not notify the sync task about a new base chain tip,
      it should eventually discover it by itself (and not block forever).  */
@@ -251,8 +289,8 @@ TEST_F (SyncTests, DiscoversNewBlocks)
 
 TEST_F (SyncTests, LongReorg)
 {
-  const auto genesis = base.SetGenesis (base.NewGenesis (0));
-  StartSync (genesis);
+  base.SetGenesis (base.NewGenesis (0));
+  StartSync (13);
 
   const auto forkPoint = base.SetTip (base.NewBlock ());
 
@@ -269,7 +307,7 @@ TEST_F (SyncTests, LongReorg)
   const auto longBranch = base.AttachBranch (forkPoint.hash, 20);
 
   LOG (INFO) << "Restarting sync, doing reorg...";
-  StartSync (genesis);
+  StartSync (100);
   cb.WaitForTip (longBranch.back ().hash);
 }
 
@@ -282,7 +320,7 @@ TEST_F (SyncTests, ShortReorg)
   const auto genesis = base.SetGenesis (base.NewGenesis (0));
   const auto longBranch = base.AttachBranch (genesis.hash, 10);
 
-  StartSync (genesis);
+  StartSync (10);
   cb.WaitForTip (longBranch.back ().hash);
 
   const auto reorg = base.SetTip (base.NewBlock (genesis.hash));
@@ -295,17 +333,17 @@ TEST_F (SyncTests, ReactivatingKnownChain)
   const auto genesis = base.SetGenesis (base.NewGenesis (0));
 
   const auto branch1 = base.AttachBranch (genesis.hash, 10);
-  StartSync (genesis);
+  StartSync (10);
   cb.WaitForTip (branch1.back ().hash);
   StopSync ();
 
   const auto branch2 = base.AttachBranch (genesis.hash, 10);
-  StartSync (genesis);
+  StartSync (10);
   cb.WaitForTip (branch2.back ().hash);
   StopSync ();
 
   base.SetTip (branch1.back ());
-  StartSync (genesis);
+  StartSync (10);
   cb.WaitForTip (branch1.back ().hash);
 }
 
@@ -314,9 +352,9 @@ TEST_F (SyncTests, NoSuperfluousUpdateCalls)
   /* Make sure that the update callback is not invoked if the tip
      does not actually change.  */
 
-  const auto genesis = base.SetGenesis (base.NewGenesis (0));
+  base.SetGenesis (base.NewGenesis (0));
   const auto tip = base.SetTip (base.NewBlock ());
-  StartSync (genesis);
+  StartSync (0);
   cb.WaitForTip (tip.hash);
 
   const unsigned calls = cb.GetNumUpdateCalls ();
@@ -331,18 +369,18 @@ TEST_F (SyncTests, VerifiesChainString)
 
   base.SetChain ("foo");
   const auto genesis = base.SetGenesis (base.NewGenesis (0));
-  StartSync (genesis);
+  StartSync (0);
   cb.WaitForTip (genesis.hash);
 
   StopSync ();
-  StartSync (genesis);
+  StartSync (0);
   cb.WaitForTip (genesis.hash);
 
   StopSync ();
   base.SetChain ("bar");
   EXPECT_DEATH (
     {
-      StartSync (genesis);
+      StartSync (0);
       cb.WaitForTip (genesis.hash);
     }, "Chain mismatch");
 }

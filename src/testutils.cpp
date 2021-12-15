@@ -105,7 +105,7 @@ TestBaseChain::SetGenesis (const BlockData& blk)
   std::lock_guard<std::mutex> lock(mut);
 
   blocks[blk.hash] = blk;
-  chain.Initialise (blk);
+  chain.ImportTip (blk);
 
   cvNewTip.notify_all ();
 
@@ -204,6 +204,15 @@ TestBaseChain::EnablePending ()
   return true;
 }
 
+uint64_t
+TestBaseChain::GetTipHeight ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  const int64_t height = chain.GetTipHeight ();
+  CHECK_GE (height, 0) << "No genesis has been set yet";
+  return height;
+}
+
 std::vector<BlockData>
 TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {
@@ -220,6 +229,26 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
     }
 
   return res;
+}
+
+int64_t
+TestBaseChain::GetMainchainHeight (const std::string& hash)
+{
+  std::lock_guard<std::mutex> lock(mut);
+
+  uint64_t height;
+  if (!chain.GetHeightForHash (hash, height))
+    return -1;
+
+  /* The block is known, but we need to verify as well if it is on
+     the main chain.  */
+  std::string mainchainHash;
+  if (!chain.GetHashForHeight (height, mainchainHash))
+    return -1;
+  if (mainchainHash != hash)
+    return -1;
+
+  return height;
 }
 
 std::vector<std::string>
@@ -345,6 +374,14 @@ TestZmqSubscriber::AwaitMessages (const std::string& cmd, const size_t num)
     }
 
   return res;
+}
+
+void
+TestZmqSubscriber::ForgetAll ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  messages.clear ();
+  VLOG (1) << "Forgot all received and not yet expected messages";
 }
 
 /* ************************************************************************** */

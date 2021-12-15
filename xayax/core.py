@@ -28,7 +28,7 @@ class Instance:
   most likely be used.
   """
 
-  def __init__ (self, basedir, portgen, binary):
+  def __init__ (self, basedir, portgen, binary, dirname="xayax-core"):
     """
     Initialises / configures a fresh instance without starting it.
     portgen should be a generator that yields free ports for using
@@ -36,7 +36,7 @@ class Instance:
     """
 
     self.log = logging.getLogger ("xayax.core")
-    self.datadir = os.path.join (basedir, "xayax-core")
+    self.datadir = os.path.join (basedir, dirname)
     self.binary = binary
 
     self.port = next (portgen)
@@ -71,7 +71,6 @@ class Instance:
     args.append ("--port=%d" % self.port)
     args.append ("--zmq_address=tcp://127.0.0.1:%d" % self.zmqPort)
     args.append ("--datadir=%s" % self.datadir)
-    args.append ("--genesis_height=0")
     args.append ("--sanity_checks")
     envVars = dict (os.environ)
     envVars["GLOG_log_dir"] = self.datadir

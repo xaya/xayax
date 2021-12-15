@@ -31,10 +31,8 @@ constexpr auto WAIT_BETWEEN_STEPS = std::chrono::milliseconds (1);
 
 } // anonymous namespace
 
-Sync::Sync (BaseChain& b, Chainstate& c, std::mutex& mutC,
-            const std::string& genHash, const uint64_t genHeight)
-  : base(b), chain(c), mutChain(mutC),
-    genesisHash(genHash), genesisHeight(genHeight)
+Sync::Sync (BaseChain& b, Chainstate& c, std::mutex& mutC, const uint64_t pd)
+  : base(b), chain(c), mutChain(mutC), pruningDepth(pd)
 {}
 
 Sync::~Sync ()
@@ -106,24 +104,26 @@ Sync::IncreaseNumBlocks ()
 }
 
 bool
-Sync::RetrieveGenesis (std::vector<BlockData>& blocks)
+Sync::ImportNewTip (const uint64_t height)
 {
-  blocks = base.GetBlockRange (genesisHeight, 1);
+  const auto blocks = base.GetBlockRange (height, 1);
   if (blocks.empty ())
     {
       LOG (WARNING)
-          << "Failed to get genesis block at height " << genesisHeight
+          << "Failed to get block at height " << height
           << " from the base chain";
       return false;
     }
 
   CHECK_EQ (blocks.size (), 1);
   const auto& blk = blocks.front ();
-  CHECK_EQ (blk.hash, genesisHash) << "Mismatch in genesis hash";
 
-  chain.Initialise (blk);
-  LOG (INFO)
-      << "Retrieved genesis block " << genesisHash << " from the base chain";
+  chain.ImportTip (blk);
+  LOG (INFO) << "Imported new tip " << blk.hash << " from the base chain";
+
+  if (cb != nullptr)
+    cb->TipUpdatedFrom ("", blocks);
+
   return true;
 }
 
@@ -132,22 +132,18 @@ Sync::UpdateStep ()
 {
   std::lock_guard<std::mutex> lock(mutChain);
 
+  /* Check the current height of the base chain, and what height we
+     want to quick-sync to / initialise at based on the pruning depth.  */
+  const uint64_t baseTip = base.GetTipHeight ();
+  const uint64_t genesisHeight
+      = (baseTip < pruningDepth ? 0 : baseTip - pruningDepth);
+
   int64_t startHeight = nextStartHeight;
   if (nextStartHeight == -1)
     {
       const int64_t tipHeight = chain.GetTipHeight ();
       if (tipHeight == -1)
-        {
-          std::vector<BlockData> blocks;
-          if (!RetrieveGenesis (blocks))
-            return false;
-
-          Callbacks* cbCopy = cb;
-          if (cbCopy != nullptr)
-            cbCopy->TipUpdatedFrom ("", blocks);
-
-          return true;
-        }
+        return ImportNewTip (genesisHeight);
       startHeight = tipHeight;
     }
 
@@ -178,9 +174,21 @@ Sync::UpdateStep ()
   if (blocks.empty () || !chain.SetTip (blocks.front (), oldTip))
     {
       /* The first block does not fit to our existing chain.  We need to
-         go back and request blocks prior until we find the fork point.  */
+         go back and request blocks prior until we find the fork point.
+
+         Make sure that the first block can (by height) fit to our pruned chain.
+         Note that usually we would need the next block to be one *above* the
+         lowest unpruned height to fit (so we know the parent as well), but
+         there is no harm in requesting that block itself as well.  If it
+         matches the one we have, then the attach will be fine.  This also
+         covers the case of just detaches back to the lowest unpruned block.  */
       IncreaseNumBlocks ();
-      nextStartHeight = std::max<int64_t> (genesisHeight, startHeight - num);
+      nextStartHeight = std::max<int64_t> (chain.GetLowestUnprunedHeight (),
+                                           startHeight - num);
+      /* If this did not decrease the start height at all, it means that we are
+         already at the lowest unpruned height but that is not good enough.
+         In other words, a reorg beyond the pruning depth.  */
+      CHECK_LT (nextStartHeight, startHeight) << "Reorg beyond pruning depth";
       return true;
     }
 
@@ -204,13 +212,12 @@ Sync::UpdateStep ()
   /* Only notify about a new tip if we actually have a new tip.  This makes
      sure we are not notifying for the case that only the current tip was
      returned in our query.  */
-  Callbacks* cbCopy = cb;
-  if (cbCopy != nullptr && oldTip != blocks.back ().hash)
+  if (cb != nullptr && oldTip != blocks.back ().hash)
     {
       std::reverse (oldForkBranch.begin (), oldForkBranch.end ());
       for (const auto& b : blocks)
         oldForkBranch.push_back (b);
-      cbCopy->TipUpdatedFrom (oldTip, oldForkBranch);
+      cb->TipUpdatedFrom (oldTip, oldForkBranch);
     }
 
   /* If we received fewer blocks than requested, we are caught up.  */
@@ -219,6 +226,14 @@ Sync::UpdateStep ()
       numBlocks = 1;
       return false;
     }
+
+  /* We are now guaranteed to be on the main chain per the base-chain query.
+     If we are far behind the base-chain tip (more than the pruning height),
+     quick-sync forward by just reimporting the new tip.  Assuming that no
+     reorgs happen beyond the pruning depth, this is safe to do and will still
+     ensure that all branches a GSP might be attached to are kept.  */
+  if (blocks.back ().height < genesisHeight && ImportNewTip (genesisHeight))
+    return true;
 
   /* Otherwise, we continue retrieving blocks.  */
   IncreaseNumBlocks ();

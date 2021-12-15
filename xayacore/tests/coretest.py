@@ -27,6 +27,9 @@ class Fixture (testcase.BaseChainFixture):
     parser.add_argument ("--xcore_binary", default="",
                          help="xayax-core binary to use")
 
+  def getXayaXExtraArgs (self):
+    return []
+
   @contextmanager
   def environment (self):
     with super ().environment ():
@@ -34,14 +37,19 @@ class Fixture (testcase.BaseChainFixture):
       self.syncBlocks ()
       yield
 
-  def createBaseChain (self):
-    xcoreBin = self.args.xcore_binary
-    if not xcoreBin:
-      top_builddir = os.getenv ("top_builddir")
-      if top_builddir is None:
-        top_builddir = "../.."
-      xcoreBin = os.path.join (top_builddir, "xayacore", "xayax-core")
+  def getXCoreBinary (self):
+    if self.args.xcore_binary:
+      return self.args.xcore_binary
 
+    top_builddir = os.getenv ("top_builddir")
+    if top_builddir is None:
+      top_builddir = "../.."
+
+    return os.path.join (top_builddir, "xayacore", "xayax-core")
+
+  def createBaseChain (self):
+    xcoreBin = self.getXCoreBinary ()
+    xcoreCmd = [xcoreBin] + self.getXayaXExtraArgs ()
     env = core.Environment (self.basedir, self.portgen,
-                            self.args.xayad_binary, xcoreBin)
+                            self.args.xayad_binary, xcoreCmd)
     return env.run ()

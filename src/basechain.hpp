@@ -86,6 +86,11 @@ public:
   }
 
   /**
+   * Returns the block height of the current tip.
+   */
+  virtual uint64_t GetTipHeight () = 0;
+
+  /**
    * Retrieves a slice of blocks with all associated data (block metadata
    * and contained moves) on the main chain from height start (inclusive)
    * onward.  If there are no or fewer than count blocks on the main chain
@@ -93,6 +98,12 @@ public:
    */
   virtual std::vector<BlockData> GetBlockRange (uint64_t start,
                                                 uint64_t count) = 0;
+
+  /**
+   * Queries for a block by hash, and returns that block's height
+   * if it is known and on the main chain, and -1 otherwise.
+   */
+  virtual int64_t GetMainchainHeight (const std::string& hash) = 0;
 
   /**
    * Returns the current mempool of pending transactions (the txids),

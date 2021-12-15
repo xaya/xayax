@@ -92,7 +92,7 @@ protected:
   const BlockData genesis;
 
   ControllerTests ()
-    : genesis(base.NewGenesis (10))
+    : genesis(base.NewGenesis (0))
   {
     dataDir = std::tmpnam (nullptr);
     LOG (INFO) << "Using temporary data directory: " << dataDir;
@@ -122,10 +122,8 @@ protected:
   /**
    * Recreates the Controller instance, including starting it.  If there is
    * already an instance, it will be stopped and destructed first.
-   *
-   * If pruning is not -1, then pruning is enabled on the controller.
    */
-  void Restart (int pruning = -1, bool pending = false);
+  void Restart (unsigned maxReorgDepth = 1'000'000, bool pending = false);
 
   /**
    * Expects ZMQ messages (first detaches and then attaches) to be received
@@ -134,6 +132,12 @@ protected:
   void ExpectZmq (const std::vector<BlockData>& detach,
                   const std::vector<BlockData>& attach,
                   const std::string& reqtoken = "");
+
+  /**
+   * Waits for the ZMQ attach message of the given block, ignoring all
+   * before that.
+   */
+  void WaitForZmqTip (const BlockData& tip);
 
   /**
    * Awaits n pending ZMQ messages and returns them.
@@ -179,7 +183,6 @@ public:
   TestController (ControllerTests& tc)
     : Controller(tc.base, tc.dataDir.string ())
   {
-    SetGenesis (tc.genesis.hash, tc.genesis.height);
     SetZmqEndpoint (ZMQ_ADDR);
     SetRpcBinding (RPC_PORT, true);
     EnableSanityChecks ();
@@ -213,13 +216,12 @@ ControllerTests::DisableSync ()
 }
 
 void
-ControllerTests::Restart (const int pruning, const bool pending)
+ControllerTests::Restart (const unsigned maxReorgDepth, const bool pending)
 {
   StopController ();
 
   controller = std::make_unique<TestController> (*this);
-  if (pruning >= 0)
-    controller->EnablePruning (pruning);
+  controller->SetMaxReorgDepth (maxReorgDepth);
   if (pending)
     controller->EnablePending ();
 
@@ -266,6 +268,25 @@ ControllerTests::ExpectZmq (const std::vector<BlockData>& detach,
     {
       ASSERT_EQ (actual[i]["block"]["hash"], attach[i].hash);
       ASSERT_EQ (actual[i]["reqtoken"].asString (), reqtoken);
+    }
+}
+
+void
+ControllerTests::WaitForZmqTip (const BlockData& tip)
+{
+  while (true)
+    {
+      const auto attaches
+          = controller->sub->AwaitMessages ("game-block-attach json " + GAME_ID,
+                                            1);
+      CHECK_EQ (attaches.size (), 1);
+      const auto& msg = attaches.front ();
+      ASSERT_EQ (msg["reqtoken"].asString (), "");
+      if (msg["block"]["hash"].asString () == tip.hash)
+        {
+          controller->sub->ForgetAll ();
+          return;
+        }
     }
 }
 
@@ -330,7 +351,7 @@ TEST_F (ControllerTests, Restart)
   ExpectZmq ({a}, {b, c});
 }
 
-TEST_F (ControllerTests, PruningDepth)
+TEST_F (ControllerTests, ReorgBeyondPruningDepth)
 {
   const auto a = base.SetTip (base.NewBlock ());
   const auto b = base.SetTip (base.NewBlock ());
@@ -347,13 +368,13 @@ TEST_F (ControllerTests, PruningDepth)
       Restart ();
       const auto c = base.SetTip (base.NewBlock (a.hash));
       ExpectZmq ({branch2[1], branch2[0], b}, {c});
-    }, "is already pruned");
+    }, "Reorg beyond pruning depth");
 }
 
-TEST_F (ControllerTests, PruningZeroDepth)
+TEST_F (ControllerTests, ZeroReorgDepth)
 {
   ExpectZmq ({}, {genesis});
-  Restart (1);
+  Restart (0);
   const auto a = base.SetTip (base.NewBlock ());
   const auto b = base.SetTip (base.NewBlock ());
   ExpectZmq ({}, {a, b});
@@ -399,7 +420,7 @@ protected:
   ControllerRpcTests ()
     : httpClient(GetRpcEndpoint ()), rpc(httpClient)
   {
-    ExpectZmq ({}, {genesis});
+    WaitForZmqTip (genesis);
   }
 
 };
@@ -417,11 +438,11 @@ TEST_F (ControllerRpcTests, GetZmqNotifications)
   for (auto& e : expected)
     e["address"] = ZMQ_ADDR;
 
-  Restart (-1, true);
+  Restart (1'000'000, true);
   EXPECT_EQ (rpc.getzmqnotifications (), expected);
 
   expected.resize (1);
-  Restart (-1, false);
+  Restart (1'000'000, false);
   EXPECT_EQ (rpc.getzmqnotifications (), expected);
 }
 
@@ -453,7 +474,7 @@ TEST_F (ControllerRpcTests, GetNetworkInfo)
 TEST_F (ControllerRpcTests, GetBlockchainInfo)
 {
   const auto a = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {a});
+  WaitForZmqTip (a);
 
   /* The first call to getblockchaininfo will cache the chain.  */
   base.SetChain ("foo");
@@ -469,14 +490,12 @@ TEST_F (ControllerRpcTests, GetBlockchainInfo)
 TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
 {
   const auto a = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {a});
+  WaitForZmqTip (a);
   const auto b = base.SetTip (base.NewBlock (genesis.hash));
-  ExpectZmq ({a}, {b});
+  WaitForZmqTip (b);
 
   EXPECT_EQ (rpc.getblockhash (genesis.height), genesis.hash);
   EXPECT_EQ (rpc.getblockhash (a.height), b.hash);
-  EXPECT_THROW (rpc.getblockhash (genesis.height - 1),
-                jsonrpc::JsonRpcException);
   EXPECT_THROW (rpc.getblockhash (a.height + 1), jsonrpc::JsonRpcException);
 
   const auto hdr = rpc.getblockheader (a.hash);
@@ -490,7 +509,7 @@ TEST_F (ControllerRpcTests, Pending)
   /* We need to add a first block to get the PendingManager into synced
      state and make sure it will forward messages.  */
   const auto blk = base.SetTip (base.NewBlock ());
-  ExpectZmq ({}, {blk});
+  WaitForZmqTip (blk);
 
   EXPECT_EQ (rpc.getrawmempool (), ParseJson ("[]"));
 
@@ -548,10 +567,10 @@ protected:
   ControllerSendUpdatesTests ()
   {
     a = base.SetTip (base.NewBlock ());
-    ExpectZmq ({}, {a});
+    WaitForZmqTip (a);
     b = base.SetTip (base.NewBlock (genesis.hash));
     c = base.SetTip (base.NewBlock ());
-    ExpectZmq ({a}, {b, c});
+    WaitForZmqTip (c);
   }
 
 };
@@ -579,16 +598,16 @@ TEST_F (ControllerSendUpdatesTests, AttachOnly)
 
 TEST_F (ControllerSendUpdatesTests, DetachOnly)
 {
-  base.SetTip (genesis);
-  ExpectZmq ({c, b}, {});
+  base.SetTip (b);
+  ExpectZmq ({c}, {});
 
-  const auto upd = rpc.game_sendupdates (a.hash, GAME_ID);
-  EXPECT_EQ (upd["toblock"], genesis.hash);
+  const auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], b.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 0,
     "detach": 1
   })"));
-  ExpectZmq ({a}, {}, upd["reqtoken"].asString ());
+  ExpectZmq ({c}, {}, upd["reqtoken"].asString ());
 }
 
 TEST_F (ControllerSendUpdatesTests, DetachAndAttach)
@@ -602,17 +621,6 @@ TEST_F (ControllerSendUpdatesTests, DetachAndAttach)
   ExpectZmq ({a}, {b, c}, upd["reqtoken"].asString ());
 }
 
-TEST_F (ControllerSendUpdatesTests, FromGenesis)
-{
-  const auto upd = rpc.game_sendupdates ("", GAME_ID);
-  EXPECT_EQ (upd["toblock"], c.hash);
-  EXPECT_EQ (upd["steps"], ParseJson (R"({
-    "attach": 3,
-    "detach": 0
-  })"));
-  ExpectZmq ({}, {genesis, b, c}, upd["reqtoken"].asString ());
-}
-
 TEST_F (ControllerSendUpdatesTests, ChainMismatch)
 {
   /* We use an extended chain in this test:
@@ -624,7 +632,7 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
   */
 
   const auto d = base.SetTip (base.NewBlock (b.hash));
-  ExpectZmq ({c}, {d});
+  WaitForZmqTip (d);
   DisableSync ();
 
   /* If we reorg back to a, then the fork point according to the local
@@ -651,6 +659,36 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
     "detach": 1
   })"));
   ExpectZmq ({c}, {}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
+{
+  /* genesis - b - c - d
+            |  \ - branch0 - ... - branch4
+             \ a
+  */
+
+  Restart (2);
+  const auto d = base.SetTip (base.NewBlock ());
+  WaitForZmqTip (d);
+  const auto branch = base.AttachBranch (b.hash, 5);
+  WaitForZmqTip (branch.back ());
+
+  auto upd = rpc.game_sendupdates (d.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], branch.back ().hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 5,
+    "detach": 2
+  })"));
+  ExpectZmq ({d, c}, branch, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates (b.hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], branch.back ().hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 5,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, branch, upd["reqtoken"].asString ());
 }
 
 /* ************************************************************************** */

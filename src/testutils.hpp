@@ -140,8 +140,10 @@ public:
 
   void Start () override;
   bool EnablePending () override;
+  uint64_t GetTipHeight () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
+  int64_t GetMainchainHeight (const std::string& hash) override;
   std::vector<std::string> GetMempool () override;
   bool VerifyMessage (const std::string& msg, const std::string& signature,
                       std::string& addr) override;
@@ -204,6 +206,11 @@ public:
    * we get them), and returns all associated JSON data.
    */
   std::vector<Json::Value> AwaitMessages (const std::string& cmd, size_t num);
+
+  /**
+   * Forgets / ignores all unexpected messages.
+   */
+  void ForgetAll ();
 
 };
 

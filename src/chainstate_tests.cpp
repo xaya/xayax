@@ -71,7 +71,7 @@ protected:
 
   /**
    * Generates a new genesis block with the given height, sets it
-   * with Initialise and returns the block's hash.
+   * as tip and returns the block's hash.
    */
   std::string
   SetGenesis (const uint64_t height)
@@ -83,7 +83,7 @@ protected:
 
     blocks.emplace (res.hash, res);
 
-    state.Initialise (res);
+    state.ImportTip (res);
 
     return res.hash;
   }
@@ -176,6 +176,7 @@ TEST_F (ChainstateTests, BasicChain)
   EXPECT_EQ (oldTip, b);
 
   EXPECT_EQ (state.GetTipHeight (), 13);
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), 10);
 
   std::string hash;
   EXPECT_FALSE (state.GetHashForHeight (9, hash));
@@ -215,30 +216,6 @@ TEST_F (ChainstateTests, SettingOldBlockAsTip)
   const auto c = AddBlock (b, oldTip);
   EXPECT_EQ (oldTip, a);
   EXPECT_EQ (state.GetTipHeight (), 13);
-}
-
-TEST_F (ChainstateTests, Reinitialisation)
-{
-  const auto genesis1 = SetGenesis (10);
-  const auto a = AddBlock (genesis1);
-  const auto b = AddBlock (a);
-
-  const auto genesis2 = SetGenesis (11);
-
-  EXPECT_EQ (state.GetTipHeight (), 11);
-
-  std::string hash;
-  EXPECT_FALSE (state.GetHashForHeight (10, hash));
-  EXPECT_FALSE (state.GetHashForHeight (12, hash));
-  ASSERT_TRUE (state.GetHashForHeight (11, hash));
-  EXPECT_EQ (hash, genesis2);
-
-  uint64_t height;
-  EXPECT_FALSE (state.GetHeightForHash (genesis1, height));
-  EXPECT_FALSE (state.GetHeightForHash (a, height));
-  EXPECT_FALSE (state.GetHeightForHash (b, height));
-  ASSERT_TRUE (state.GetHeightForHash (genesis2, height));
-  EXPECT_EQ (height, 11);
 }
 
 TEST_F (ChainstateTests, InvalidAttach)
@@ -331,6 +308,59 @@ TEST_F (ChainstateTests, ForkBranch)
   EXPECT_THAT (branch, ElementsAre (GetBlock (e), GetBlock (b), GetBlock (a)));
 }
 
+TEST_F (ChainstateTests, ReimportedTip)
+{
+  const auto genesis = SetGenesis (10);
+  const auto a = AddBlock (genesis);
+  const auto b = AddBlock (a);
+  const auto c = AddBlock (b);
+
+  /* Mark b/c as a branch, while genesis/a stay on the main chain.  Later we
+     reimport another tip, which is assumed to be a descendant of a at a later
+     height.  We can then continue to attach to that new tip without having
+     to import all the blocks leading back to a.  The branch can still be
+     retrieved properly.  */
+
+  std::string oldTip;
+  ASSERT_TRUE (state.SetTip (GetBlock (a), oldTip));
+
+  const auto newGenesis = SetGenesis (100);
+  const auto d = AddBlock (newGenesis);
+
+  EXPECT_EQ (state.GetTipHeight (), 101);
+
+  uint64_t height;
+  /* Reimporting a new tip will automatically prune everything before.  */
+  EXPECT_FALSE (state.GetHeightForHash (genesis, height));
+  EXPECT_FALSE (state.GetHeightForHash (a, height));
+  EXPECT_TRUE (state.GetHeightForHash (b, height));
+  EXPECT_TRUE (state.GetHeightForHash (c, height));
+  EXPECT_TRUE (state.GetHeightForHash (newGenesis, height));
+  EXPECT_TRUE (state.GetHeightForHash (d, height));
+
+  std::vector<BlockData> branch;
+  ASSERT_TRUE (state.GetForkBranch (c, branch));
+  EXPECT_THAT (branch, ElementsAre (GetBlock (c), GetBlock (b)));
+}
+
+TEST_F (ChainstateTests, ImportingExistingTip)
+{
+  const auto genesis = SetGenesis (10);
+  const auto a = AddBlock (genesis);
+  const auto b = AddBlock (a);
+
+  /* We revert back to a as tip, and then import b.  This should work
+     fine, without running into UNIQUE constraint violations in the database
+     (for instance).  */
+
+  std::string oldTip;
+  ASSERT_TRUE (state.SetTip (GetBlock (a), oldTip));
+  state.ImportTip (GetBlock (b));
+
+  EXPECT_EQ (state.GetTipHeight (), 12);
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), 12);
+}
+
 TEST_F (ChainstateTests, ExtraDataAndPruning)
 {
   const auto genesis = SetGenesis (10);
@@ -373,8 +403,13 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   for (unsigned i = 0; i < 20; ++i)
     cur = AddBlock (cur);
 
-  /* Prune up to the tip (excluding only the last block).  */
-  state.Prune (state.GetTipHeight () - 1);
+  /* Prune up to the tip (excluding only the last two blocks).  We also
+     record the block hash of the preceding (then pruned) block for later.  */
+  std::string prunedHash;
+  ASSERT_TRUE (state.GetHashForHeight (state.GetTipHeight () - 2, prunedHash));
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), 10);
+  state.Prune (state.GetTipHeight () - 2);
+  EXPECT_EQ (state.GetLowestUnprunedHeight (), state.GetTipHeight () - 1);
 
   /* Retrieving the fork branch for the two orphan blocks should still work,
      including all the data.  */
@@ -382,22 +417,16 @@ TEST_F (ChainstateTests, ExtraDataAndPruning)
   ASSERT_TRUE (state.GetForkBranch (b, branch));
   EXPECT_THAT (branch, ElementsAre (GetBlock (b), GetBlock (a)));
 
-  /* Forking the very last block is fine.  */
+  /* Forking the very last block is fine (we still got the common parent
+     not yet pruned).  */
   std::string hash;
   ASSERT_TRUE (state.GetHashForHeight (state.GetTipHeight () - 1, hash));
   AddBlock (hash);
   ASSERT_TRUE (state.GetForkBranch (cur, branch));
 
-  /* Forking a block further down aborts as we have already pruned
-     those detached blocks.  */
-  ASSERT_TRUE (state.GetHashForHeight (state.GetTipHeight () - 2, hash));
-  EXPECT_DEATH (
-    {
-      /* We need to do the AddBlock also here inside the EXPECT_DEATH
-         macro, or else the end-of-test sanity check will die as well.  */
-      AddBlock (hash);
-      state.GetForkBranch (cur, branch);
-    }, "is already pruned");
+  /* Forking a block further down fails as we have already pruned
+     the parent block it would be attached to.  */
+  EXPECT_EQ (AddBlock (prunedHash), "error");
 }
 
 TEST_F (ChainstateTests, UpdateBatch)

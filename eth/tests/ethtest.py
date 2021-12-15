@@ -23,6 +23,9 @@ class Fixture (testcase.BaseChainFixture):
     parser.add_argument ("--xeth_binary", default="",
                          help="xayax-eth binary to use")
 
+  def getXayaXExtraArgs (self):
+    return []
+
   @contextmanager
   def environment (self):
     with super ().environment ():
@@ -36,8 +39,9 @@ class Fixture (testcase.BaseChainFixture):
       if top_builddir is None:
         top_builddir = "../.."
       xethBin = os.path.join (top_builddir, "eth", "xayax-eth")
+    xethCmd = [xethBin] + self.getXayaXExtraArgs ()
 
-    env = eth.Environment (self.basedir, self.portgen, xethBin)
+    env = eth.Environment (self.basedir, self.portgen, xethCmd)
     return env.run ()
 
   def deployMultiMover (self):

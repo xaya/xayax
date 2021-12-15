@@ -93,8 +93,10 @@ public:
 
   void Start () override;
 
+  uint64_t GetTipHeight () override;
   std::vector<BlockData> GetBlockRange (uint64_t start,
                                         uint64_t count) override;
+  int64_t GetMainchainHeight (const std::string& hash) override;
   std::vector<std::string> GetMempool () override;
   bool VerifyMessage (const std::string& msg, const std::string& signature,
                       std::string& addr) override;

@@ -129,6 +129,22 @@ TEST_F (TestBaseChainTests, GetBlockRange)
   EXPECT_THAT (bc.GetBlockRange (9, 5), ElementsAre ());
 }
 
+TEST_F (TestBaseChainTests, GetMainchainHeight)
+{
+  const auto genesis = bc.SetGenesis (bc.NewGenesis (10));
+  const auto a = bc.SetTip (bc.NewBlock ());
+  const auto b = bc.SetTip (bc.NewBlock ());
+  const auto c = bc.SetTip (bc.NewBlock ());
+  const auto d = bc.SetTip (bc.NewBlock (a.hash));
+
+  EXPECT_EQ (bc.GetMainchainHeight ("foo"), -1);
+  EXPECT_EQ (bc.GetMainchainHeight (genesis.hash), 10);
+  EXPECT_EQ (bc.GetMainchainHeight (a.hash), 11);
+  EXPECT_EQ (bc.GetMainchainHeight (b.hash), -1);
+  EXPECT_EQ (bc.GetMainchainHeight (c.hash), -1);
+  EXPECT_EQ (bc.GetMainchainHeight (d.hash), 12);
+}
+
 /* ************************************************************************** */
 
 } // anonymous namespace

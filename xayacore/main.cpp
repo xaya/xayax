@@ -30,14 +30,11 @@ DEFINE_bool (listen_locally, true,
 DEFINE_string (zmq_address, "",
                "the address to bind the ZMQ publisher to");
 
-DEFINE_int64 (genesis_height, -1,
-               "height from which to start the local chain state");
+DEFINE_int32 (max_reorg_depth, 1'000,
+              "maximum supported depth of reorgs");
 
 DEFINE_bool (pending_moves, true,
              "whether to enable tracking of pending moves");
-DEFINE_int32 (enable_pruning, -1,
-              "if non-negative (including zero), old move data will be pruned"
-              " and only as many blocks as specified will be kept");
 DEFINE_bool (sanity_checks, false,
              "whether or not to run slow sanity checks for testing");
 
@@ -62,31 +59,20 @@ main (int argc, char* argv[])
         throw std::runtime_error ("--zmq_address must be set");
       if (FLAGS_datadir.empty ())
         throw std::runtime_error ("--datadir must be set");
-      if (FLAGS_genesis_height == -1)
-        throw std::runtime_error ("--genesis_height must be set");
+      if (FLAGS_max_reorg_depth < 0)
+        throw std::runtime_error ("--max_reorg_depth must not be negative");
 
       xayax::CoreChain base(FLAGS_core_rpc_url);
       base.Start ();
 
       xayax::Controller controller(base, FLAGS_datadir);
-
-      /* We use the genesis height passed and determine the associated
-         block hash.  The height must be already deeply confirmed, so it
-         will not be reorged any more.  */
-      const auto genesis = base.GetBlockRange (FLAGS_genesis_height, 1);
-      if (genesis.size () != 1)
-        throw std::runtime_error ("Genesis block is not yet on the base chain");
-      LOG (INFO) << "Using block " << genesis[0].hash << " as genesis block";
-      controller.SetGenesis (genesis[0].hash, FLAGS_genesis_height);
-
+      controller.SetMaxReorgDepth (FLAGS_max_reorg_depth);
       controller.SetZmqEndpoint (FLAGS_zmq_address);
       controller.SetRpcBinding (FLAGS_port, FLAGS_listen_locally);
       if (FLAGS_pending_moves)
         controller.EnablePending ();
       if (FLAGS_sanity_checks)
         controller.EnableSanityChecks ();
-      if (FLAGS_enable_pruning >= 0)
-        controller.EnablePruning (FLAGS_enable_pruning);
 
       controller.Run ();
     }
