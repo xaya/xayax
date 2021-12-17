@@ -8,6 +8,8 @@ Python, e.g. for regression testing.
 """
 
 
+from xayax import rpcproxy
+
 from xayagametest import xaya
 
 import jsonrpclib
@@ -127,6 +129,9 @@ class Environment:
   two RPC interfaces for testing:  One of the actual Xaya Core instance,
   which can be used to write things (like moves or mining of blocks),
   and one of the Xaya X process, which should be connected to the GSP.
+
+  The RPC connection between Xaya X and Xaya Core is proxied, so that
+  tests can check what happens if it breaks somehow temporarily.
   """
 
   def __init__ (self, basedir, portgen, coreBinary, xayaxBinary):
@@ -139,6 +144,7 @@ class Environment:
                                  coreBinary)
     self.xayanode = self.env.node
     self.xnode = Instance (basedir, portgen, xayaxBinary)
+    self.proxyPort = next (portgen)
 
   @contextmanager
   def run (self):
@@ -147,9 +153,13 @@ class Environment:
     as a context manager.
     """
 
-    with self.env.run (), \
-         self.xnode.run (self.xayanode.rpcurl):
-      yield self
+    with self.env.run ():
+      xayaRpcUrl, _ = self.xayanode.getWalletRpc ("")
+      self.proxy = rpcproxy.Proxy (("localhost", self.proxyPort), xayaRpcUrl)
+      with self.proxy.run (), \
+           self.xnode.run ("http://localhost:%d" % self.proxyPort):
+        yield self
+      self.proxy = None
 
   def createCoreRpc (self):
     """
