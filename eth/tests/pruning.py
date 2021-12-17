@@ -35,20 +35,19 @@ if __name__ == "__main__":
       xrpc = jsonrpclib.ServerProxy (f.env.getXRpcUrl ())
 
       base = f.generate (10)
-      _, baseHeight = f.env.getChainTip ()
-      f.assertZmqBlocks (sub, "attach", base)
+      tip, baseHeight = f.env.getChainTip ()
+      f.waitForZmqTip (sub, tip)
       snapshot = f.env.snapshot ()
 
       branch1 = f.generate (5)
-      f.assertZmqBlocks (sub, "attach", branch1)
+      f.waitForZmqTip (sub, branch1[-1])
 
       snapshot.restore ()
       # Make sure we do not regenerate the same branch again.
       f.sendMove ("p/domob", {})
       branch2 = f.generate (20)
       assert branch1[0] != branch2[0]
-      f.assertZmqBlocks (sub, "detach", branch1[::-1])
-      f.assertZmqBlocks (sub, "attach", branch2)
+      f.waitForZmqTip (sub, branch2[-1])
 
       f.assertEqual (xrpc.getblockhash (height=baseHeight+5), branch2[4])
       f.assertEqual (xrpc.getblockheader (blockhash=branch2[4])["height"],

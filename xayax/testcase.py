@@ -269,6 +269,21 @@ class Fixture:
       else:
         self.assertEqual (data["reqtoken"], reqtoken)
 
+  def waitForZmqTip (self, sub, tip):
+    """
+    Polls ZMQ messages until we receive an attach for the given tip.
+    All messages received before that are ignored.
+    """
+
+    while True:
+      topic, data = sub.receive ()
+      if topic != "game-block-attach":
+        continue
+      if "reqtoken" in data:
+        continue
+      if data["block"]["hash"] == tip:
+        break
+
 
 class BaseChainFixture (Fixture):
   """
