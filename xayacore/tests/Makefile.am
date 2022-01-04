@@ -6,6 +6,7 @@ TEST_LIBRARY = coretest.py
 
 REGTESTS = \
   attach_detach.py \
+  basechain_errors.py \
   block_data.py \
   moves.py \
   pending.py \
