@@ -84,6 +84,8 @@ private:
    * The actual detach blocks will be returned in detaches.  If attaches
    * was not filled in and is instead retrieved, then those blocks will be
    * returned in queriedAttach.
+   *
+   * This method may throw in case of a base-chain error.
    */
   void PushZmqBlocks (const std::string& from,
                       const std::vector<BlockData>& attaches, unsigned num,
@@ -131,6 +133,20 @@ private:
   std::string cachedChain;
   /** Cached version of the basechain.  */
   int64_t cachedVersion = -1;
+
+  /**
+   * Throws an internal JSON-RPC error to indicate that we had an issue
+   * with the base chain given by the passed-in exception.
+   */
+  static void
+  PropagateBaseChainError (const std::exception& exc)
+  {
+    LOG (WARNING) << "Base-chain error while handling RPC: " << exc.what ();
+    std::ostringstream msg;
+    msg << "Error with base chain: " << exc.what ();
+    throw jsonrpc::JsonRpcException (jsonrpc::Errors::ERROR_RPC_INTERNAL_ERROR,
+                                     msg.str ());
+  }
 
 public:
 
@@ -195,7 +211,14 @@ Controller::RpcServer::getnetworkinfo ()
 
   std::lock_guard<std::mutex> lock(mut);
   if (cachedVersion == -1)
-    cachedVersion = run.parent.base.GetVersion ();
+    try
+      {
+        cachedVersion = run.parent.base.GetVersion ();
+      }
+    catch (const std::exception& exc)
+      {
+        PropagateBaseChainError (exc);
+      }
   CHECK_GE (cachedVersion, -1);
   res["version"] = static_cast<Json::Int64> (cachedVersion);
 
@@ -210,7 +233,14 @@ Controller::RpcServer::getblockchaininfo ()
   {
     std::lock_guard<std::mutex> lock(mut);
     if (cachedChain.empty ())
-      cachedChain = run.parent.base.GetChain ();
+      try
+        {
+          cachedChain = run.parent.base.GetChain ();
+        }
+      catch (const std::exception& exc)
+        {
+          PropagateBaseChainError (exc);
+        }
     CHECK (!cachedChain.empty ());
     res["chain"] = cachedChain;
   }
@@ -250,7 +280,16 @@ Controller::RpcServer::getblockhash (const int height)
   if (height >= run.chain.GetLowestUnprunedHeight ())
     throw jsonrpc::JsonRpcException (-8, "block height out of range");
 
-  const auto blocks = run.parent.base.GetBlockRange (height, 1);
+  std::vector<BlockData> blocks;
+  try
+    {
+      blocks = run.parent.base.GetBlockRange (height, 1);
+    }
+  catch (const std::exception& exc)
+    {
+      PropagateBaseChainError (exc);
+    }
+
   if (blocks.empty ())
     throw jsonrpc::JsonRpcException (-8, "block height out of range");
 
@@ -274,12 +313,19 @@ Controller::RpcServer::getblockheader (const std::string& hash)
     }
 
   /* Check the base chain to see if this might be a pruned block.  */
-  const int64_t baseHeight = run.parent.base.GetMainchainHeight (hash);
-  if (baseHeight != -1)
+  try
     {
-      CHECK_GE (baseHeight, 0);
-      res["height"] = static_cast<Json::Int64> (baseHeight);
-      return res;
+      const int64_t baseHeight = run.parent.base.GetMainchainHeight (hash);
+      if (baseHeight != -1)
+        {
+          CHECK_GE (baseHeight, 0);
+          res["height"] = static_cast<Json::Int64> (baseHeight);
+          return res;
+        }
+    }
+  catch (const std::exception& exc)
+    {
+      PropagateBaseChainError (exc);
     }
 
   throw jsonrpc::JsonRpcException (-5, "block not found");
@@ -301,11 +347,16 @@ Controller::RpcServer::game_sendupdates (const std::string& from,
   }
 
   std::vector<BlockData> detaches, attaches;
-  {
-    std::lock_guard<std::mutex> lock(run.mutChain);
-    run.PushZmqBlocks (from, {}, FLAGS_xayax_block_range, reqtoken.str (),
-                       detaches, attaches);
-  }
+  try
+    {
+      std::lock_guard<std::mutex> lock(run.mutChain);
+      run.PushZmqBlocks (from, {}, FLAGS_xayax_block_range, reqtoken.str (),
+                         detaches, attaches);
+    }
+  catch (const std::exception& exc)
+    {
+      PropagateBaseChainError (exc);
+    }
 
   std::string toBlock;
   if (!attaches.empty ())
@@ -339,7 +390,15 @@ Controller::RpcServer::verifymessage (const std::string& addr,
   const bool addrRecovery = addr.empty ();
 
   std::string signerAddr;
-  const bool ok = run.parent.base.VerifyMessage (msg, sgn, signerAddr);
+  bool ok;
+  try
+    {
+      ok = run.parent.base.VerifyMessage (msg, sgn, signerAddr);
+    }
+  catch (const std::exception& exc)
+    {
+      PropagateBaseChainError (exc);
+    }
 
   if (!ok)
     {
@@ -363,7 +422,15 @@ Controller::RpcServer::verifymessage (const std::string& addr,
 Json::Value
 Controller::RpcServer::getrawmempool ()
 {
-  const auto mempool = run.parent.base.GetMempool ();
+  std::vector<std::string> mempool;
+  try
+    {
+      mempool = run.parent.base.GetMempool ();
+    }
+  catch (const std::exception& exc)
+    {
+      PropagateBaseChainError (exc);
+    }
 
   Json::Value res(Json::arrayValue);
   for (const auto& txid : mempool)
@@ -439,7 +506,16 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
 {
   CHECK (!attaches.empty ());
   std::vector<BlockData> detach, queriedAttach;
-  PushZmqBlocks (oldTip, attaches, 0, "", detach, queriedAttach);
+  try
+    {
+      PushZmqBlocks (oldTip, attaches, 0, "", detach, queriedAttach);
+    }
+  catch (const std::exception& exc)
+    {
+      LOG (WARNING) << "Error while pushing ZMQ block updates: " << exc.what ();
+      /* Just ignore pushing the blocks for now.  GSPs are able to recover
+         from missing ZMQ notifications anyway.  */
+    }
 
   /* Potentially push queued pending moves after the block attach/detach
      notifications have been sent to GSPs.  */

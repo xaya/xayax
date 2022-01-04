@@ -80,10 +80,18 @@ private:
   /** The version number to return.  */
   uint64_t version = 0;
 
+  /** If set to true, then implementation methods throw.  */
+  bool shouldThrow = false;
+
   /**
    * Constructs a new block hash based on our counter.
    */
   std::string NewBlockHash ();
+
+  /**
+   * Checks if shouldThrow is true, and throws if it is.
+   */
+  void MaybeThrow ();
 
 public:
 
@@ -137,6 +145,11 @@ public:
    * Sets the version number to return.
    */
   void SetVersion (uint64_t v);
+
+  /**
+   * Turns errors to be thrown by implementation methods on or off.
+   */
+  void SetShouldThrow (bool v);
 
   void Start () override;
   bool EnablePending () override;

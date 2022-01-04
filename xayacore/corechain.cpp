@@ -331,7 +331,19 @@ CoreChain::ZmqListener::HandleHashBlock (const std::string& payload)
 void
 CoreChain::ZmqListener::HandleRawTx (const std::string& payload)
 {
-  const auto tx = rpc->decoderawtransaction (Hexlify (payload));
+  Json::Value tx;
+  try
+    {
+      tx = rpc->decoderawtransaction (Hexlify (payload));
+    }
+  catch (const jsonrpc::JsonRpcException& exc)
+    {
+      /* If the RPC is broken, just ignore the notification (which is
+         fine to do anyway as pendings are just best-effort).  */
+      LOG (WARNING) << "Xaya Core RPC error for pending move: " << exc.what ();
+      return;
+    }
+
   MoveData mv;
   if (GetMoveFromTx (tx, mv))
     parent.PendingMoves ({mv});

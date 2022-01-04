@@ -396,6 +396,31 @@ TEST_F (SyncTests, VerifiesChainString)
     }, "Chain mismatch");
 }
 
+TEST_F (SyncTests, BaseChainErrors)
+{
+  base.SetGenesis (base.NewGenesis (0));
+  const auto blk1 = base.SetTip (base.NewBlock ());
+
+  StartSync (0);
+  cb.WaitForTip (blk1.hash);
+
+  base.SetShouldThrow (true);
+  const auto blk2 = base.SetTip (base.NewBlock ());
+
+  /* The sync should not yet update (as it can't).  */
+  sync->NewBaseChainTip ();
+  SleepSome ();
+  ReadChainstate ([&] (const Chainstate& chain)
+    {
+      EXPECT_EQ (GetCurrentTip (chain), blk1.hash);
+    });
+
+  /* Now it should recover.  */
+  base.SetShouldThrow (false);
+  sync->NewBaseChainTip ();
+  cb.WaitForTip (blk2.hash);
+}
+
 /* ************************************************************************** */
 
 } // anonymous namespace

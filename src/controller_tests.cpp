@@ -552,6 +552,42 @@ TEST_F (ControllerRpcTests, Pending)
   ));
 }
 
+TEST_F (ControllerRpcTests, BaseChainErrors)
+{
+  /* We want to prune up to the last block (so we can test the handling
+     of pruned blocks in RPC methods).  */
+  Restart (0);
+
+  base.SetTip (base.NewBlock ());
+  const auto blk = base.SetTip (base.NewBlock ());
+  WaitForZmqTip (blk);
+
+  /* Cache chain and version.  */
+  base.SetChain ("foo");
+  base.SetVersion (42);
+  rpc.getblockchaininfo ();
+  rpc.getnetworkinfo ();
+
+  base.SetShouldThrow (true);
+
+  EXPECT_EQ (rpc.getnetworkinfo (), ParseJson (R"({
+    "version": 42
+  })"));
+
+  auto res = rpc.getblockchaininfo ();
+  EXPECT_EQ (res["chain"], "foo");
+  EXPECT_EQ (res["blocks"].asInt (), blk.height);
+  EXPECT_EQ (res["bestblockhash"], blk.hash);
+
+  EXPECT_EQ (rpc.getblockhash (blk.height), blk.hash);
+  EXPECT_THROW (rpc.getblockhash (0), jsonrpc::JsonRpcException);
+
+  res = rpc.getblockheader (blk.hash);
+  EXPECT_EQ (res["hash"], blk.hash);
+  EXPECT_EQ (res["height"].asInt (), blk.height);
+  EXPECT_THROW (rpc.getblockheader (genesis.hash), jsonrpc::JsonRpcException);
+}
+
 /* ************************************************************************** */
 
 class ControllerSendUpdatesTests : public ControllerRpcTests

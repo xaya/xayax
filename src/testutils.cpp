@@ -62,6 +62,14 @@ TestBaseChain::NewBlockHash ()
   return res.str ();
 }
 
+void
+TestBaseChain::MaybeThrow ()
+{
+  std::lock_guard<std::mutex> lock(mut);
+  if (shouldThrow)
+    throw std::runtime_error ("simulated base-chain error");
+}
+
 BlockData
 TestBaseChain::NewGenesis (const uint64_t h)
 {
@@ -167,6 +175,13 @@ TestBaseChain::SetVersion (const uint64_t v)
 }
 
 void
+TestBaseChain::SetShouldThrow (const bool v)
+{
+  std::lock_guard<std::mutex> lock(mut);
+  shouldThrow = v;
+}
+
+void
 TestBaseChain::Start ()
 {
   std::lock_guard<std::mutex> lock(mut);
@@ -207,6 +222,7 @@ TestBaseChain::EnablePending ()
 uint64_t
 TestBaseChain::GetTipHeight ()
 {
+  MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
   const int64_t height = chain.GetTipHeight ();
   CHECK_GE (height, 0) << "No genesis has been set yet";
@@ -216,6 +232,7 @@ TestBaseChain::GetTipHeight ()
 std::vector<BlockData>
 TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
 {
+  MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
   std::vector<BlockData> res;
 
@@ -234,6 +251,7 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
 int64_t
 TestBaseChain::GetMainchainHeight (const std::string& hash)
 {
+  MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
 
   uint64_t height;
@@ -254,6 +272,7 @@ TestBaseChain::GetMainchainHeight (const std::string& hash)
 std::vector<std::string>
 TestBaseChain::GetMempool ()
 {
+  MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
   return mempool;
 }
@@ -268,6 +287,7 @@ TestBaseChain::VerifyMessage (const std::string& msg,
 std::string
 TestBaseChain::GetChain ()
 {
+  MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
   return chainString;
 }
@@ -275,6 +295,7 @@ TestBaseChain::GetChain ()
 uint64_t
 TestBaseChain::GetVersion ()
 {
+  MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
   return version;
 }
