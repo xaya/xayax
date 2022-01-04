@@ -15,12 +15,11 @@ namespace xayax
 
 DEFINE_int32 (xayax_block_range, 128,
               "maximum number of blocks to process at once");
+DEFINE_int32 (xayax_update_timeout_ms, 5'000,
+              "time in ms between forced sync updates");
 
 namespace
 {
-
-/** Time between sync updates even if no tip notification is received.  */
-constexpr auto UPDATE_TIMEOUT = std::chrono::seconds (5);
 
 /**
  * Time to sleep between update steps even if we are still not fully caught up.
@@ -68,6 +67,8 @@ Sync::Start ()
   updater = std::make_unique<std::thread> ([this] ()
     {
       std::unique_lock<std::mutex> lock(mut);
+      const auto timeout
+          = std::chrono::milliseconds (FLAGS_xayax_update_timeout_ms);
       while (!shouldStop)
         {
           if (UpdateStep ())
@@ -77,7 +78,7 @@ Sync::Start ()
               lock.lock ();
             }
           else
-            cv.wait_for (lock, UPDATE_TIMEOUT);
+            cv.wait_for (lock, timeout);
         }
     });
 }

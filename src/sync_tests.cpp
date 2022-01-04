@@ -7,6 +7,7 @@
 #include "private/chainstate.hpp"
 #include "testutils.hpp"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
@@ -17,6 +18,9 @@
 
 namespace xayax
 {
+
+DECLARE_int32 (xayax_update_timeout_ms);
+
 namespace
 {
 
@@ -214,6 +218,10 @@ TEST_F (SyncTests, InitialBlock)
 
 TEST_F (SyncTests, BasicSyncing)
 {
+  /* Make sure we use a long / "real" update time out, so that we can ensure
+     it is not actually used.  */
+  FLAGS_xayax_update_timeout_ms = 10'000;
+
   base.SetGenesis (base.NewGenesis (0));
   base.SetTip (base.NewBlock ());
   auto blk = base.SetTip (base.NewBlock ());
@@ -275,6 +283,9 @@ TEST_F (SyncTests, FastCatchup)
 
 TEST_F (SyncTests, DiscoversNewBlocks)
 {
+  /* Use a smaller update timeout to speed up the test.  */
+  FLAGS_xayax_update_timeout_ms = 100;
+
   base.SetGenesis (base.NewGenesis (0));
   StartSync (0);
 
