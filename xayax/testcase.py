@@ -156,6 +156,7 @@ class Fixture:
     rootLogger = logging.getLogger ()
     rootLogger.setLevel (logging.INFO)
     rootLogger.addHandler (logHandler)
+    self.rootHandlers = [logHandler]
 
     self.log = logging.getLogger ("xayax.testcase")
 
@@ -165,6 +166,7 @@ class Fixture:
     self.mainLogger = logging.getLogger ("main")
     self.mainLogger.addHandler (logHandler)
     self.mainLogger.addHandler (mainHandler)
+    self.mainHandlers = [logHandler, mainHandler]
     self.mainLogger.info ("Base directory for integration test: %s"
                             % self.basedir)
 
@@ -205,7 +207,10 @@ class Fixture:
       else:
         cleanup = True
 
-    logging.shutdown ()
+    for h in self.rootHandlers:
+      logging.getLogger ().removeHandler (h)
+    for h in self.mainHandlers:
+      self.mainLogger.removeHandler (h)
 
     if cleanup:
       shutil.rmtree (self.basedir, ignore_errors=True)
