@@ -1,4 +1,4 @@
-# Copyright (C) 2021 The Xaya developers
+# Copyright (C) 2021-2022 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -472,10 +472,23 @@ class Environment:
     return account.address
 
   def signMessage (self, addr, msg):
-    assert addr in self.signerAccounts, "%s is not a signer address" % addr
-    account = self.signerAccounts[addr]
+    account = self.lookupSignerAccount (addr)
+    assert account is not None, "%s is not a signer address" % addr
     encoded = messages.encode_defunct (text=msg)
     return account.sign_message (encoded).signature.hex ()
+
+  def lookupSignerAccount (self, addr):
+    """
+    Returns the eth_accounts.Account instance that corresponds to the
+    given address.  The address must have been returned previously
+    from createSignerAddress.  This can be used if direct access to the
+    private keys is needed, for instance.
+    """
+
+    if addr not in self.signerAccounts:
+      return None
+
+    return self.signerAccounts[addr]
 
   def nameExists (self, ns, nm):
     # We use an in-memory register of names that have been registered,
