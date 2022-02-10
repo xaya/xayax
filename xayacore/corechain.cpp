@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,8 @@
 #include "rpcutils.hpp"
 
 #include "rpc-stubs/corerpcclient.h"
+
+#include <eth-utils/hexutils.hpp>
 
 #include <jsonrpccpp/client.h>
 #include <jsonrpccpp/common/exception.h>
@@ -65,7 +67,7 @@ GetMoveFromTx (const Json::Value& data, MoveData& mv)
           const auto& burnVal = scriptPubKey["burn"];
           CHECK (burnVal.isString ());
           std::string burn;
-          CHECK (Unhexlify (burnVal.asString (), burn));
+          CHECK (ethutils::Unhexlify (burnVal.asString (), burn));
           if (burn.substr (0, 2) == "g/")
             {
               burn = burn.substr (2);
@@ -325,7 +327,7 @@ CoreChain::ZmqListener::ReceiveLoop ()
 void
 CoreChain::ZmqListener::HandleHashBlock (const std::string& payload)
 {
-  parent.TipChanged (Hexlify (payload));
+  parent.TipChanged (ethutils::Hexlify (payload));
 }
 
 void
@@ -334,7 +336,7 @@ CoreChain::ZmqListener::HandleRawTx (const std::string& payload)
   Json::Value tx;
   try
     {
-      tx = rpc->decoderawtransaction (Hexlify (payload));
+      tx = rpc->decoderawtransaction (ethutils::Hexlify (payload));
     }
   catch (const jsonrpc::JsonRpcException& exc)
     {

@@ -24,7 +24,6 @@ libxayax_la_SOURCES = \
   chainstate.cpp \
   database.cpp \
   pending.cpp \
-  rpcutils.cpp \
   sync.cpp \
   zmqpub.cpp
 xayax_HEADERS = \
@@ -57,7 +56,6 @@ tests_SOURCES = testutils.cpp \
   chainstate_tests.cpp \
   controller_tests.cpp \
   pending_tests.cpp \
-  rpcutils_tests.cpp \
   sync_tests.cpp \
   testutils_tests.cpp \
   zmqpub_tests.cpp

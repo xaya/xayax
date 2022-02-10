@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,17 +12,6 @@
 
 namespace xayax
 {
-
-/**
- * Converts a binary string to hex.
- */
-std::string Hexlify (const std::string& bin);
-
-/**
- * Converts a hex string into a binary string.  Returns false if the input
- * string is not valid hex.
- */
-bool Unhexlify (const std::string& hex, std::string& bin);
 
 /**
  * Simple wrapper around a JSON-RPC connection to some HTTP endpoint.

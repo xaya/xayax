@@ -1,10 +1,10 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "abi.hpp"
 
-#include "rpcutils.hpp"
+#include <eth-utils/hexutils.hpp>
 
 #include <glog/logging.h>
 
@@ -71,7 +71,7 @@ AbiDecoder::ReadString ()
     }
 
   std::string res;
-  CHECK (Unhexlify (hexData, res));
+  CHECK (ethutils::Unhexlify (hexData, res));
 
   return res;
 }
