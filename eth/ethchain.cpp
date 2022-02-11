@@ -1,15 +1,15 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "ethchain.hpp"
 
-#include "abi.hpp"
 #include "contract-constants.hpp"
 #include "rpcutils.hpp"
 
 #include "rpc-stubs/ethrpcclient.h"
 
+#include <eth-utils/abi.hpp>
 #include <eth-utils/address.hpp>
 
 #include <jsonrpccpp/client.h>
@@ -21,6 +21,8 @@
 #include <map>
 #include <sstream>
 #include <utility>
+
+using ethutils::AbiDecoder;
 
 namespace xayax
 {

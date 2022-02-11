@@ -22,12 +22,10 @@ libethchain_la_LIBADD = \
   $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) \
   $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 libethchain_la_SOURCES = \
-  abi.cpp \
   contract-constants.cpp \
   ethchain.cpp \
   websocket.cpp
 noinst_HEADERS = \
-  abi.hpp \
   contract-constants.hpp \
   ethchain.hpp \
   websocket.hpp \
@@ -41,16 +39,6 @@ xayax_eth_LDADD = \
   $(top_builddir)/src/libxayax.la \
   $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 xayax_eth_SOURCES = main.cpp
-
-check_PROGRAMS = tests-unit
-TESTS = tests-unit
-
-tests_unit_CXXFLAGS = \
-  $(GLOG_CFLAGS) $(GTEST_CFLAGS)
-tests_unit_LDADD = $(builddir)/libethchain.la \
-  $(GLOG_LIBS) $(GTEST_LIBS)
-tests_unit_SOURCES = \
-  abi_tests.cpp
 
 contract-constants.cpp: gen-contract-constants.py
 	$(srcdir)/gen-contract-constants.py >$@
