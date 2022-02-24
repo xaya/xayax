@@ -200,7 +200,7 @@ class Ganache:
       return
 
     self.log.info ("Starting new Ganache-CLI process")
-    args = ["/usr/bin/env", "ganache-cli"]
+    args = ["/usr/bin/env", "ganache"]
     args.extend (["-p", str (self.port)])
     args.extend (["--db", self.datadir])
     # By default, Ganache mines a new block on each transaction sent.
@@ -212,6 +212,9 @@ class Ganache:
     # genesis block will be before anything programmed into a particular
     # game, as would be the case with a real network.
     args.extend (["-t", "2018-01-01Z00:00:00"])
+    # We want eth_call to throw in case of a tx revert (this is also what
+    # e.g. geth does).
+    args.append ("--chain.vmErrorsOnRPCResponse")
     self.logFile = open (os.path.join (self.datadir, "ganache.log"), "wt")
     self.proc = subprocess.Popen (args, stderr=subprocess.STDOUT,
                                   stdout=self.logFile)
