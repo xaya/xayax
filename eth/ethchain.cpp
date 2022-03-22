@@ -9,7 +9,6 @@
 
 #include "rpc-stubs/ethrpcclient.h"
 
-#include <eth-utils/abi.hpp>
 #include <eth-utils/address.hpp>
 
 #include <jsonrpccpp/client.h>
@@ -110,11 +109,21 @@ ExtractBaseData (const Json::Value& val)
 MoveData
 ExtractMove (const Json::Value& val)
 {
-  MoveData res;
+  AbiDecoder dec(val["data"].asString ());
+  MoveData res = GetMoveDataFromLogs (dec);
   res.txid = ConvertUint256 (val["transactionHash"].asString ());
+
+  return res;
+}
+
+} // anonymous namespace
+
+MoveData
+GetMoveDataFromLogs (AbiDecoder& dec)
+{
+  MoveData res;
   res.metadata = Json::Value (Json::objectValue);
 
-  AbiDecoder dec(val["data"].asString ());
   res.ns = dec.ReadString ();
   res.name = dec.ReadString ();
   res.mv = dec.ReadString ();
@@ -136,8 +145,6 @@ ExtractMove (const Json::Value& val)
 
   return res;
 }
-
-} // anonymous namespace
 
 /* ************************************************************************** */
 

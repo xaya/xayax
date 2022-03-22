@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,12 +9,19 @@
 
 #include "basechain.hpp"
 
+#include <eth-utils/abi.hpp>
 #include <eth-utils/ecdsa.hpp>
 
 #include <memory>
 
 namespace xayax
 {
+
+/**
+ * Extracts the data for one move from the logs data.  The txid is not
+ * part of the logs and not added to MoveData by this method.
+ */
+MoveData GetMoveDataFromLogs (ethutils::AbiDecoder& dec);
 
 /**
  * BaseChain connector that links to an Ethereum-like network endpoing.
