@@ -10,6 +10,8 @@
 #include "rpc-stubs/ethrpcclient.h"
 
 #include <eth-utils/address.hpp>
+#include <eth-utils/hexutils.hpp>
+#include <eth-utils/keccak.hpp>
 
 #include <jsonrpccpp/client.h>
 
@@ -142,6 +144,34 @@ GetMoveDataFromLogs (AbiDecoder& dec)
     out[receiver.GetChecksummed ()]
         = static_cast<double> (amount) / std::pow (10.0, DECIMALS);
   res.metadata["out"] = out;
+
+  /* In Xaya Core, the transaction ID is a pretty good identifier for
+     a move; it commits to the actual move data (with all extras like
+     CHI payments) and also, through the chain of the name-coin input,
+     to the previous moves by the same account.
+
+     On an EVM chain, this is not the case.  There a single transaction
+     can trigger multiple moves (even by different names), or the moves
+     can depend on the context (e.g. contract storage) and even change
+     in a reorg.
+
+     Thus, we provide an additional "move ID" here, which is the Keccak hash
+     of the ABI-encoded log data.  This commits to the move data, payment,
+     and is unique for moves through name/nonce.  This can be used instead
+     of the txid for things like channel IDs or reinits, and is a concept
+     that should be pretty close to the txid on Xaya Core.
+
+     Note that of course the actual meaning of a particular move may still
+     depend on the context (like other moves processed before), just as is
+     the case with Xaya Core.  To get a really unique identifier, the mvid
+     can be combined together with the block hash, which then also depends on
+     the entire context and history.  */
+
+  const std::string dataHex = dec.GetAllDataRead ();
+  CHECK_EQ (dataHex.substr (0, 2), "0x");
+  std::string dataBin;
+  CHECK (ethutils::Unhexlify (dataHex.substr (2), dataBin));
+  res.metadata["mvid"] = ethutils::Hexlify (ethutils::Keccak256 (dataBin));
 
   return res;
 }
