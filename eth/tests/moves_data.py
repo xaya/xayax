@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2021 The Xaya developers
+# Copyright (C) 2021-2022 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +13,34 @@ and returned with the expected data.
 import ethtest
 
 from xayax.testcase import ZmqSubscriber
+
+
+def mvid (f, ns, nm, nonce):
+  """
+  Extracts the move log for ns/name/nonce through the web3 and
+  contracts instances in the passed test fixture, and returns the
+  associated mvid (by hashing the ABI-encoded log data).
+  """
+
+  sgn = "Move(string,string,string,uint256,uint256,address,uint256,address)"
+  fpr = f.w3.keccak (text=sgn)
+
+  reg = f.env.contracts.registry
+  tokenId = reg.functions.tokenIdForName (ns, nm).call ()
+
+  events = f.w3.eth.get_logs ({
+    "address": reg.address,
+    "topics": [fpr.hex (), "0x%064x" % tokenId],
+  })
+
+  moveEvent = reg.events.Move ()
+  for ev in events:
+    proc = moveEvent.processLog (ev)
+    if proc["args"]["nonce"] == nonce:
+      return f.w3.keccak (hexstr=ev["data"]).hex ()[2:]
+
+  raise AssertionError ("no move logs found for %s/%s nonce %d"
+                          % (ns, nm, nonce))
 
 
 if __name__ == "__main__":
@@ -29,7 +57,7 @@ if __name__ == "__main__":
         },
         "cmd": "something",
       })
-      txid1 = f.sendMove ("p/domob", {
+      txid1 = f.sendMove ("p/dömob", {
         "g": {
           "x": "abc",
           "game": [1, 2, 3],
@@ -51,6 +79,7 @@ if __name__ == "__main__":
           {
             "txid": txid2,
             "cmd": "admin",
+            "mvid": mvid (f, "g", "game", 0),
             "burnt": 0,
             "out": {addr1: 0.12345678},
           },
@@ -58,8 +87,9 @@ if __name__ == "__main__":
         "moves": [
           {
             "txid": txid1,
-            "name": "domob",
+            "name": "dömob",
             "move": [1, 2, 3],
+            "mvid": mvid (f, "p", "dömob", 0),
             "burnt": 0,
             "out": {},
           },
@@ -67,6 +97,7 @@ if __name__ == "__main__":
             "txid": txid3,
             "name": "andy",
             "move": {},
+            "mvid": mvid (f, "p", "andy", 0),
             "burnt": 0,
             "out": {addr2: 42},
           },
