@@ -43,6 +43,11 @@ public:
   void Start (Callbacks& cb);
 
   /**
+   * Adds a subscription for pending moves to the already running listener.
+   */
+  void EnablePending ();
+
+  /**
    * Closes the current connection and shuts the listening down.
    */
   void Stop ();
@@ -64,6 +69,13 @@ public:
    */
   virtual void
   NewTip (const std::string& tip)
+  {}
+
+  /**
+   * Invoked when a new pending transaction is found.
+   */
+  virtual void
+  NewPendingTx (const std::string& txid)
   {}
 
 };

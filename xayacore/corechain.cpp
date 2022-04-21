@@ -418,7 +418,7 @@ CoreChain::EnablePending ()
   if (addr.empty ())
     {
       LOG (WARNING)
-          << "Xaya COre has no -zmqpubrawtx notifier,"
+          << "Xaya Core has no -zmqpubrawtx notifier,"
           << " pending moves will not be detected";
       return false;
     }

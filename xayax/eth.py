@@ -98,7 +98,7 @@ class Instance:
 
     self.proc = None
 
-  def start (self, accountsContract, ethrpc, ws=None):
+  def start (self, accountsContract, ethrpc, ws=None, watchForPending=[]):
     """
     Starts the process, waiting until its RPC interface is up.
     """
@@ -116,6 +116,7 @@ class Instance:
     args.append ("--port=%d" % self.port)
     args.append ("--zmq_address=tcp://127.0.0.1:%d" % self.zmqPort)
     args.append ("--datadir=%s" % self.datadir)
+    args.append ("--watch_for_pending_moves=%s" % ",".join (watchForPending))
     args.append ("--sanity_checks")
     envVars = dict (os.environ)
     envVars["GLOG_log_dir"] = self.datadir
@@ -390,6 +391,41 @@ class Environment:
     self.ganache = Ganache (basedir, next (portgen))
     self.xnode = Instance (basedir, portgen, xayaxBinary)
     self.log = logging.getLogger ("xayax.eth")
+    self.watchForPending = []
+    self.defaultPending = False
+
+    # Users of this class can register their own callback closures for
+    # between starting of the test chain and Xaya X.  This can be used
+    # e.g. to deploy custom constracts as needed, and then add them
+    # to the watchForPending.
+    self.deploymentCbs = []
+
+  def enablePending (self):
+    """
+    Sets a flag that indicates that upon starting the environment,
+    the auto-deployed accounts contract should be tracked for pending
+    moves by default.
+    """
+
+    self.defaultPending = True
+
+  def addWatchedContract (self, addr):
+    """
+    Adds the given contract address as being watched for pending moves once
+    the instance is started.
+    """
+
+    self.watchForPending.append (addr)
+
+  def addDeploymentCallback (self, cb):
+    """
+    Adds the given cb to be invoked (with the environment passed as
+    single argument) when starting, between running the Ethereum chain
+    and starting Xaya X.  This can do custom extra deployment steps needed
+    on the chain before starting the test.
+    """
+
+    self.deploymentCbs.append (cb)
 
   @contextmanager
   def run (self):
@@ -405,8 +441,13 @@ class Environment:
       self.log.info ("Accounts contract: %s" % self.contracts.registry.address)
       self.ganache.w3.eth.default_account = self.contracts.account
       self.clearRegisteredCache ()
-      with self.xnode.run (self.contracts.registry.address,
-                           self.ganache.rpcurl, self.ganache.wsurl):
+      if self.defaultPending:
+        self.addWatchedContract (self.contracts.registry.address)
+      for cb in self.deploymentCbs:
+        cb (self)
+      with self.xnode.run (self.contracts.registry.address, self.ganache.rpcurl,
+                           ws=self.ganache.wsurl,
+                           watchForPending=self.watchForPending):
         yield self
 
   def createGanacheRpc (self):

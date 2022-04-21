@@ -5,6 +5,7 @@
 #include "ethchain.hpp"
 
 #include "contract-constants.hpp"
+#include "hexutils.hpp"
 #include "rpcutils.hpp"
 
 #include "rpc-stubs/ethrpcclient.h"
@@ -69,17 +70,6 @@ EncodeHexInt (const int64_t val)
   std::ostringstream out;
   out << "0x" << std::hex << val;
   return out.str ();
-}
-
-/**
- * Converts a uint256 hash with 0x prefix as from the Ethereum RPC
- * interface to one without prefix as libxayagame expects them.
- */
-std::string
-ConvertUint256 (const std::string& withPrefix)
-{
-  CHECK_EQ (withPrefix.substr (0, 2), "0x");
-  return withPrefix.substr (2);
 }
 
 /**
@@ -206,6 +196,34 @@ EthChain::NewTip (const std::string& tip)
 }
 
 void
+EthChain::NewPendingTx (const std::string& txid)
+{
+  CHECK (pending != nullptr)
+      << "Pending move received, but tracking is not turned on";
+
+  EthRpc rpc(endpoint);
+  std::vector<MoveData> moves;
+  try
+    {
+      moves = pending->GetMoves (*rpc, txid);
+    }
+  catch (const jsonrpc::JsonRpcException& exc)
+    {
+      /* Just ignore pending moves in case the RPC has currently
+         issues.  It might recover later, and pendings are best-effort
+         only anyway.  */
+      LOG (WARNING) << "Ethereum RPC error for pending move: " << exc.what ();
+      return;
+    }
+
+  if (!moves.empty ())
+    {
+      mempool.Add (ConvertUint256 (txid));
+      PendingMoves (moves);
+    }
+}
+
+void
 EthChain::Start ()
 {
   EthRpc rpc(endpoint);
@@ -213,6 +231,24 @@ EthChain::Start ()
 
   if (sub != nullptr)
     sub->Start (*this);
+}
+
+bool
+EthChain::EnablePending ()
+{
+  CHECK (pending == nullptr) << "Already tracking pending moves";
+  EthRpc rpc(endpoint);
+  pending = std::make_unique<PendingDataExtractor> (*rpc, accountsContract);
+  if (sub != nullptr)
+    sub->EnablePending ();
+  return true;
+}
+
+void
+EthChain::AddWatchedContract (const std::string& addr)
+{
+  CHECK (pending != nullptr) << "Pending tracking is not yet enabled";
+  pending->AddWatchedContract (addr);
 }
 
 Json::Value
@@ -267,7 +303,7 @@ EthChain::TryBlockRange (EthRpc& rpc, const int64_t startHeight,
       CHECK_EQ (err, 0)
           << "Error " << err << " retrieving block at height "
           << heightForId.at (id) << ":\n"
-          << err << resp.getErrorMessage (id);
+          << err << resp.getErrorMessage (idVal);
 
       const auto blockJson = resp.getResult (id);
       if (blockJson.isNull ())
@@ -529,8 +565,8 @@ EthChain::GetMainchainHeight (const std::string& hash)
 std::vector<std::string>
 EthChain::GetMempool ()
 {
-  /* FIXME: Implement this for real.  */
-  return {};
+  EthRpc rpc(endpoint);
+  return mempool.GetContent (*rpc);
 }
 
 bool
