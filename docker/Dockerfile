@@ -86,7 +86,8 @@ LABEL description="Xaya X connector binaries"
 VOLUME ["/log", "/xayax"]
 ENV LD_LIBRARY_PATH "/usr/local/lib64"
 ENV GLOG_log_dir "/log"
-ENV HOST "127.0.0.1"
+ENV HOST ""
+ENV MAX_REORG_DEPTH "1000"
 EXPOSE 8000
 EXPOSE 28555
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
