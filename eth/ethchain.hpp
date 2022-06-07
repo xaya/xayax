@@ -48,6 +48,9 @@ private:
   /** Contract address of the Xaya account registry.  */
   std::string accountsContract;
 
+  /** The connected chain ID.  */
+  int64_t chainId;
+
   /**
    * The extractor for pending move data.  This is set by EnablePending
    * and will remain null if pending tracking is not turned on.

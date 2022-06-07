@@ -518,7 +518,9 @@ class Environment:
   def signMessage (self, addr, msg):
     account = self.lookupSignerAccount (addr)
     assert account is not None, "%s is not a signer address" % addr
-    encoded = messages.encode_defunct (text=msg)
+    full = "Xaya signature for chain %d:\n\n%s" \
+              % (self.ganache.w3.eth.chainId, msg)
+    encoded = messages.encode_defunct (text=full)
     return account.sign_message (encoded).signature.hex ()
 
   def lookupSignerAccount (self, addr):

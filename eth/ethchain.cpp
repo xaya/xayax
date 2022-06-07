@@ -184,6 +184,9 @@ EthChain::EthChain (const std::string& httpEndpoint,
   const ethutils::Address accAddr(acc);
   CHECK (accAddr) << "Accounts contract address is invalid";
   accountsContract = accAddr.GetLowerCase ();
+
+  EthRpc rpc(endpoint);
+  chainId = AbiDecoder::ParseInt (rpc->eth_chainId ());
 }
 
 void
@@ -573,7 +576,12 @@ bool
 EthChain::VerifyMessage (const std::string& msg, const std::string& signature,
                          std::string& addr)
 {
-  const auto ethAddr = ecdsa.VerifyMessage (msg, signature);
+  /* To avoid potential issues with replay attacks, Xaya signatures
+     on the EVM chain are always explicitly tied to the chain ID.  */
+  std::ostringstream fullMsg;
+  fullMsg << "Xaya signature for chain " << chainId << ":\n\n" << msg;
+
+  const auto ethAddr = ecdsa.VerifyMessage (fullMsg.str (), signature);
   if (!ethAddr)
     return false;
 
@@ -585,7 +593,6 @@ std::string
 EthChain::GetChain ()
 {
   EthRpc rpc(endpoint);
-  const int64_t chainId = AbiDecoder::ParseInt (rpc->eth_chainId ());
   const auto mit = CHAIN_IDS.find (chainId);
   CHECK (mit != CHAIN_IDS.end ()) << "Unknown Ethereum chain ID: " << chainId;
   return mit->second;

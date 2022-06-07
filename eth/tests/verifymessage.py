@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2021 The Xaya developers
+# Copyright (C) 2021-2022 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -24,9 +24,10 @@ if __name__ == "__main__":
   with ethtest.Fixture () as f:
     xrpc = jsonrpclib.ServerProxy (f.env.getXRpcUrl ())
 
-    msg = "Test Message"
+    msg = "Test \00Message"
+    fullMsg = "Xaya signature for chain %d:\n\n%s" % (f.w3.eth.chainId, msg)
     account = Account.create ()
-    encoded = messages.encode_defunct (text=msg)
+    encoded = messages.encode_defunct (text=fullMsg)
     sgn = account.sign_message (encoded).signature.hex ()
 
     f.assertEqual (verify (xrpc, "", msg, sgn), {
@@ -39,3 +40,9 @@ if __name__ == "__main__":
     res = verify (xrpc, "", "wrong", sgn)
     f.assertEqual (res["valid"], True)
     assert res["address"] != account.address
+
+    # Verify also the Environment signing feature (i.e. that it matches
+    # up with the expected signing scheme).
+    addr = f.env.createSignerAddress ()
+    sgn = f.env.signMessage (addr, msg)
+    f.assertEqual (verify (xrpc, addr, msg, sgn), True)
