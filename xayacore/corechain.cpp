@@ -9,6 +9,7 @@
 #include "rpc-stubs/corerpcclient.h"
 
 #include <eth-utils/hexutils.hpp>
+#include <xayautil/base64.hpp>
 
 #include <jsonrpccpp/client.h>
 #include <jsonrpccpp/common/exception.h>
@@ -544,7 +545,7 @@ CoreChain::VerifyMessage (const std::string& msg, const std::string& signature,
   Json::Value res;
   try
     {
-      res = rpc->verifymessage ("", msg, signature);
+      res = rpc->verifymessage ("", msg, xaya::EncodeBase64 (signature));
     }
   catch (const jsonrpc::JsonRpcException& exc)
     {

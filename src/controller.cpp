@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,8 @@
 #include "private/sync.hpp"
 #include "private/zmqpub.hpp"
 #include "rpc-stubs/xayarpcserverstub.h"
+
+#include <xayautil/base64.hpp>
 
 #include <jsonrpccpp/common/errors.h>
 #include <jsonrpccpp/common/exception.h>
@@ -383,6 +385,17 @@ Controller::RpcServer::verifymessage (const std::string& addr,
                                       const std::string& msg,
                                       const std::string& sgn)
 {
+  /* The RPC argument for the signature is always base64 encoded (as with
+     Xaya Core).  The base chains expect "raw byte" signatures.  */
+  std::string rawSgn;
+  if (!xaya::DecodeBase64 (sgn, rawSgn))
+    {
+      LOG (WARNING) << "Signature is not base64: " << sgn;
+      throw jsonrpc::JsonRpcException (
+          jsonrpc::Errors::ERROR_RPC_INVALID_PARAMS,
+          "signature is not base64-encoded");
+    }
+
   /* If addr is passed as "", then this RPC is supposed to do recovery
      and return the signer address.  Otherwise, it should just return true
      or false depending on validity for the given address.  This is what the
@@ -393,7 +406,7 @@ Controller::RpcServer::verifymessage (const std::string& addr,
   bool ok;
   try
     {
-      ok = run.parent.base.VerifyMessage (msg, sgn, signerAddr);
+      ok = run.parent.base.VerifyMessage (msg, rawSgn, signerAddr);
     }
   catch (const std::exception& exc)
     {

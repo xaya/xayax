@@ -2,9 +2,9 @@
 # ready to run on a server.
 
 # We use the libxayagame image as base; while Xaya X does not depend on
-# libxayagame directly, it depends on many of the same base packages like
-# SQLite or libjson-rpc-cpp, so that reusing them for the build from the
-# existing package makes sense.
+# libxayagame directly, it depends on libxayautil and many of the same base
+# packages like SQLite or libjson-rpc-cpp, so that reusing them for the
+# build from the existing package makes sense.
 FROM xaya/libxayagame AS build
 RUN apk add --no-cache \
   autoconf \

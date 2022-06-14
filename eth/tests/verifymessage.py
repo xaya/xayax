@@ -13,6 +13,8 @@ import ethtest
 
 from eth_account import Account, messages
 
+import base64
+import codecs
 import jsonrpclib
 
 
@@ -28,13 +30,15 @@ if __name__ == "__main__":
     fullMsg = "Xaya signature for chain %d:\n\n%s" % (f.w3.eth.chainId, msg)
     account = Account.create ()
     encoded = messages.encode_defunct (text=fullMsg)
-    sgn = account.sign_message (encoded).signature.hex ()
+    rawSgn = account.sign_message (encoded).signature
+    sgn = codecs.decode (base64.b64encode (rawSgn), "ascii")
 
     f.assertEqual (verify (xrpc, "", msg, sgn), {
       "valid": True,
       "address": account.address,
     })
-    f.assertEqual (verify (xrpc, "", msg, "invalid"), {
+    invalidSgn = codecs.decode (base64.b64encode (b"invalid"), "ascii")
+    f.assertEqual (verify (xrpc, "", msg, invalidSgn), {
       "valid": False,
     })
     res = verify (xrpc, "", "wrong", sgn)

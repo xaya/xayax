@@ -14,6 +14,8 @@ import jsonrpclib
 from eth_account import Account, messages
 from web3 import Web3
 
+import base64
+import codecs
 from contextlib import contextmanager
 import json
 import logging
@@ -521,7 +523,8 @@ class Environment:
     full = "Xaya signature for chain %d:\n\n%s" \
               % (self.ganache.w3.eth.chainId, msg)
     encoded = messages.encode_defunct (text=full)
-    return account.sign_message (encoded).signature.hex ()
+    rawSgn = account.sign_message (encoded).signature
+    return codecs.decode (base64.b64encode (rawSgn), "ascii")
 
   def lookupSignerAccount (self, addr):
     """

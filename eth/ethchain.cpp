@@ -581,7 +581,8 @@ EthChain::VerifyMessage (const std::string& msg, const std::string& signature,
   std::ostringstream fullMsg;
   fullMsg << "Xaya signature for chain " << chainId << ":\n\n" << msg;
 
-  const auto ethAddr = ecdsa.VerifyMessage (fullMsg.str (), signature);
+  const std::string hexSgn = "0x" + ethutils::Hexlify (signature);
+  const auto ethAddr = ecdsa.VerifyMessage (fullMsg.str (), hexSgn);
   if (!ethAddr)
     return false;
 

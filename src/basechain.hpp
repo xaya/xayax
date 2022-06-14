@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2022 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -126,6 +126,9 @@ public:
    * representation.  For instance, on Ethereum where they are in principle
    * case insensitive, it is explicitly specified that addresses are supposed
    * to be returned and compared in checksummed form only.
+   *
+   * The signature is given in raw bytes (unlike the RPC interface for
+   * verifymessage, where it is base64 encoded).
    */
   virtual bool VerifyMessage (const std::string& msg,
                               const std::string& signature,
