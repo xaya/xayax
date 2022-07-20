@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Copyright (C) 2021 Autonomous Worlds Ltd
+// Copyright (C) 2021-2022 Autonomous Worlds Ltd
 
 const truffleAssert = require ("truffle-assertions");
-const truffleContract = require ("truffle-contract");
+const truffleContract = require ("@truffle/contract");
 const { time } = require ("@openzeppelin/test-helpers");
 
 /* We want to use chai-subset for checking the MoveData structs easily,

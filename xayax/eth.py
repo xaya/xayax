@@ -324,13 +324,17 @@ class Ganache:
       wchi = None
       registry = None
       policy = None
+      metadata = None
 
     res = XayaDeployment ()
     res.account = self.w3.eth.accounts[0]
 
     res.wchi = self.deployContract (res.account, loadJsonData ("WCHI.json"))
+    res.metadata = self.deployContract (res.account,
+                                        loadJsonData ("NftMetadata.json"))
     res.policy = self.deployContract (
-        res.account, loadJsonData ("XayaPolicy.json"), 100_0000)
+        res.account, loadJsonData ("XayaPolicy.json"),
+        res.metadata.address, 100_0000)
     res.registry = self.deployContract (
         res.account, loadJsonData ("XayaAccounts.json"),
         res.wchi.address, res.policy.address)

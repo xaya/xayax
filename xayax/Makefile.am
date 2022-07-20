@@ -1,5 +1,6 @@
 WCHI_CONTRACTS = WCHI.json
 ACCOUNTS_CONTRACTS = \
+  NftMetadata.json \
   XayaAccounts.json \
   XayaPolicy.json
 CONTRACTS = $(WCHI_CONTRACTS) $(ACCOUNTS_CONTRACTS)
