@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -613,7 +613,7 @@ protected:
 
 TEST_F (ControllerSendUpdatesTests, NoUpdates)
 {
-  const auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  const auto upd = rpc.game_sendupdates2 (c.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], c.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 0,
@@ -623,7 +623,7 @@ TEST_F (ControllerSendUpdatesTests, NoUpdates)
 
 TEST_F (ControllerSendUpdatesTests, AttachOnly)
 {
-  const auto upd = rpc.game_sendupdates (genesis.hash, GAME_ID);
+  const auto upd = rpc.game_sendupdates2 (genesis.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], c.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 2,
@@ -637,7 +637,7 @@ TEST_F (ControllerSendUpdatesTests, DetachOnly)
   base.SetTip (b);
   ExpectZmq ({c}, {});
 
-  const auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  const auto upd = rpc.game_sendupdates2 (c.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], b.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 0,
@@ -648,7 +648,7 @@ TEST_F (ControllerSendUpdatesTests, DetachOnly)
 
 TEST_F (ControllerSendUpdatesTests, DetachAndAttach)
 {
-  const auto upd = rpc.game_sendupdates (a.hash, GAME_ID);
+  const auto upd = rpc.game_sendupdates2 (a.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], c.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 2,
@@ -677,7 +677,7 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
   base.SetTip (a);
   const auto e = base.SetTip (base.NewBlock ());
 
-  auto upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  auto upd = rpc.game_sendupdates2 (c.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], b.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 0,
@@ -688,7 +688,7 @@ TEST_F (ControllerSendUpdatesTests, ChainMismatch)
   /* Build a base chain state where the fork point is b, but the newly
      attached tip is not known in the local chain at all.  */
   const auto f = base.SetTip (base.NewBlock (b.hash));
-  upd = rpc.game_sendupdates (c.hash, GAME_ID);
+  upd = rpc.game_sendupdates2 (c.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], b.hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 0,
@@ -710,7 +710,7 @@ TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
   const auto branch = base.AttachBranch (b.hash, 5);
   WaitForZmqTip (branch.back ());
 
-  auto upd = rpc.game_sendupdates (d.hash, GAME_ID);
+  auto upd = rpc.game_sendupdates2 (d.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], branch.back ().hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 5,
@@ -718,7 +718,7 @@ TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
   })"));
   ExpectZmq ({d, c}, branch, upd["reqtoken"].asString ());
 
-  upd = rpc.game_sendupdates (b.hash, GAME_ID);
+  upd = rpc.game_sendupdates2 (b.hash, GAME_ID);
   EXPECT_EQ (upd["toblock"], branch.back ().hash);
   EXPECT_EQ (upd["steps"], ParseJson (R"({
     "attach": 5,

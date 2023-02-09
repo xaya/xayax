@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -136,6 +136,9 @@ private:
   /** Cached version of the basechain.  */
   int64_t cachedVersion = -1;
 
+  /** The procedure for game_sendupdates with all three arguments set.  */
+  const jsonrpc::Procedure procGameSendUpdates3;
+
   /**
    * Throws an internal JSON-RPC error to indicate that we had an issue
    * with the base chain given by the passed-in exception.
@@ -152,9 +155,15 @@ private:
 
 public:
 
-  explicit RpcServer (jsonrpc::AbstractServerConnector& conn, RunData& r)
-    : XayaRpcServerStub(conn), run(r)
-  {}
+  explicit RpcServer (jsonrpc::AbstractServerConnector& conn, RunData& r);
+
+  /**
+   * libjson-rpc-cpp does not by itself support optional arguments, which
+   * we need for game_sendupdates.  Thus we override the HandleMethodCall
+   * method to manually handle calls to this method.
+   */
+  void HandleMethodCall (jsonrpc::Procedure& proc, const Json::Value& input,
+                         Json::Value& output) override;
 
   Json::Value getzmqnotifications () override;
   void trackedgames (const std::string& cmd, const std::string& game) override;
@@ -165,8 +174,12 @@ public:
   std::string getblockhash (int height) override;
   Json::Value getblockheader (const std::string& hash);
 
-  Json::Value game_sendupdates (const std::string& from,
-                                const std::string& gameId);
+  Json::Value game_sendupdates () override;
+  Json::Value game_sendupdates2 (const std::string& from,
+                                 const std::string& gameId) override;
+  Json::Value game_sendupdates3 (const std::string& from,
+                                 const std::string& gameId,
+                                 const std::string& to) override;
 
   Json::Value verifymessage (const std::string& addr, const std::string& msg,
                              const std::string& sgn) override;
@@ -175,6 +188,41 @@ public:
   void stop () override;
 
 };
+
+Controller::RpcServer::RpcServer (jsonrpc::AbstractServerConnector& conn,
+                                  RunData& r)
+  : XayaRpcServerStub(conn), run(r),
+    procGameSendUpdates3 ("game_sendupdates", jsonrpc::PARAMS_BY_NAME,
+                          jsonrpc::JSON_OBJECT,
+                          "fromblock", jsonrpc::JSON_STRING,
+                          "gameid", jsonrpc::JSON_STRING,
+                          "toblock", jsonrpc::JSON_STRING,
+                          nullptr)
+{}
+
+void
+Controller::RpcServer::HandleMethodCall (jsonrpc::Procedure& proc,
+                                         const Json::Value& input,
+                                         Json::Value& output)
+{
+
+  if (proc.GetProcedureName () == "game_sendupdates")
+    {
+      Json::Value fixedInput = input;
+      if (fixedInput.isObject () && !fixedInput.isMember ("toblock"))
+        fixedInput["toblock"] = "";
+
+      if (!procGameSendUpdates3.ValdiateParameters (fixedInput))
+        throw jsonrpc::JsonRpcException (
+            jsonrpc::Errors::ERROR_RPC_INVALID_PARAMS,
+            "invalid parameters for game_sendupdates");
+
+      game_sendupdates3I (fixedInput, output);
+      return;
+    }
+
+  XayaRpcServerStub::HandleMethodCall (proc, input, output);
+}
 
 Json::Value
 Controller::RpcServer::getzmqnotifications ()
@@ -334,12 +382,28 @@ Controller::RpcServer::getblockheader (const std::string& hash)
 }
 
 Json::Value
-Controller::RpcServer::game_sendupdates (const std::string& from,
-                                         const std::string& gameId)
+Controller::RpcServer::game_sendupdates ()
+{
+  LOG (FATAL) << "game_sendupdates call should have been intercepted";
+}
+
+Json::Value
+Controller::RpcServer::game_sendupdates2 (const std::string& from,
+                                          const std::string& gameId)
+{
+  return game_sendupdates3 (from, gameId, "");
+}
+
+Json::Value
+Controller::RpcServer::game_sendupdates3 (const std::string& from,
+                                          const std::string& gameId,
+                                          const std::string& to)
 {
   /* TODO: Actually use the gameId to filter notifications sent.  For now,
      we just trigger "default" ones.  This works as GSPs track their games
      anyway, but it may send too many notifications.  */
+
+  CHECK_EQ (to, "");
 
   std::ostringstream reqtoken;
   {

@@ -38,15 +38,32 @@
       },
     "returns": {}
   },
+
   {
     "name": "game_sendupdates",
+    "params": {},
+    "returns": {}
+  },
+  {
+    "name": "game_sendupdates2",
     "params":
       {
-        "gameid": "huc",
-        "fromblock": "hash"
+        "fromblock": "hash",
+        "gameid": "str"
       },
     "returns": {}
   },
+  {
+    "name": "game_sendupdates3",
+    "params":
+      {
+        "fromblock": "hash",
+        "toblock": "hash",
+        "gameid": "str"
+      },
+    "returns": {}
+  },
+
   {
     "name": "verifymessage",
     "params":
