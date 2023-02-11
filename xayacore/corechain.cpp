@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,15 +15,20 @@
 #include <jsonrpccpp/common/exception.h>
 #include <zmq.hpp>
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <atomic>
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <thread>
 
 namespace xayax
 {
+
+DEFINE_int32 (core_rpc_timeout_ms, 10'000,
+              "timeout for RPC calls to Xaya Core");
 
 /* ************************************************************************** */
 
@@ -160,7 +165,19 @@ ConstructBlockData (const Json::Value& data)
   return res;
 }
 
-using CoreRpc = RpcClient<CoreRpcClient, jsonrpc::JSONRPC_CLIENT_V1>;
+class CoreRpc
+    : public RpcClient<CoreRpcClient, jsonrpc::JSONRPC_CLIENT_V1>
+{
+
+public:
+
+  CoreRpc (const std::string& ep)
+    : RpcClient(ep)
+  {
+    SetTimeout (std::chrono::milliseconds (FLAGS_core_rpc_timeout_ms));
+  }
+
+};
 
 /**
  * Queries for enabled ZMQ notifications on the Xaya Core node and

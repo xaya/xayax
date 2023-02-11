@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,6 +19,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <chrono>
 #include <cmath>
 #include <map>
 #include <sstream>
@@ -33,13 +34,23 @@ DEFINE_int32 (ethchain_fast_logs_depth, 1'024,
               "use faster log retrieval for blocks buried this far in the"
               " blockchain (they should never get reorged again)");
 
+DEFINE_int32 (eth_rpc_timeout_ms, 10'000,
+              "timeout for RPC calls to the EVM node");
+
 /* ************************************************************************** */
 
 class EthChain::EthRpc
     : public RpcClient<EthRpcClient, jsonrpc::JSONRPC_CLIENT_V2>
 {
+
 public:
-  using RpcClient::RpcClient;
+
+  EthRpc (const std::string& ep)
+    : RpcClient(ep)
+  {
+    SetTimeout (std::chrono::milliseconds (FLAGS_eth_rpc_timeout_ms));
+  }
+
 };
 
 namespace

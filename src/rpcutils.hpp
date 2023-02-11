@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +8,7 @@
 #include <jsonrpccpp/client.h>
 #include <jsonrpccpp/client/connectors/httpclient.h>
 
+#include <chrono>
 #include <string>
 
 namespace xayax
@@ -35,6 +36,17 @@ public:
   explicit RpcClient (const std::string& ep)
     : http(ep), rpc(http, V)
   {}
+
+  /**
+   * Sets the timeout duration for the RPC call.
+   */
+  template <typename Rep, typename Period>
+    void
+    SetTimeout (const std::chrono::duration<Rep, Period>& val)
+  {
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds> (val);
+    http.SetTimeout (ms.count ());
+  }
 
   T&
   operator* ()
