@@ -654,25 +654,29 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
     zmq.SendBlockDetach (blk, reqtoken);
 
   /* Find the height starting from which we need to send attach blocks from
-     the main chain.  */
+     the main chain.  forkPoint will be the main-chain block to which we
+     detach or the from block if we start on the main-chain.  */
   uint64_t forkHeight;
+  std::string forkPoint;
   if (mainchainHeight != -1)
     {
       /* The fork is going back to a pruned block on main chain.  */
-      forkHeight = mainchainHeight + 1;
+      forkHeight = mainchainHeight;
+      forkPoint = from;
     }
   else if (detach.empty ())
     {
       /* The from block was already on the main chain, so we send from
          the block after it.  */
       CHECK (chain.GetHeightForHash (from, forkHeight));
-      ++forkHeight;
+      forkPoint = from;
     }
   else
     {
       /* We detached some blocks.  We start to send blocks from the main
          branch starting from the same height as the last detach.  */
-      forkHeight = detach.back ().height;
+      forkHeight = detach.back ().height - 1;
+      forkPoint = detach.back ().parent;
     }
 
   /* If we have attach blocks already, look for the fork point in the
@@ -689,15 +693,12 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
       bool foundForkPoint = false;
       for (const auto& blk : attaches)
         {
-          if (blk.height == forkHeight)
+          if (blk.height == forkHeight + 1)
             {
               foundForkPoint = true;
-              if (detach.empty ())
-                CHECK_EQ (blk.parent, from);
-              else
-                CHECK_EQ (blk.parent, detach.back ().parent);
+              CHECK_EQ (blk.parent, forkPoint);
             }
-          if (blk.height >= forkHeight)
+          if (blk.height > forkHeight)
             zmq.SendBlockAttach (blk, reqtoken);
         }
       CHECK (foundForkPoint);
@@ -708,9 +709,9 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
      blocks.  We query the base chain for the attach blocks, up to
      the specified limit (or our chain tip).  */
   const auto tipHeight = chain.GetTipHeight ();
-  CHECK_GE (tipHeight + 1, forkHeight);
-  num = std::min<unsigned> (num, tipHeight + 1 - forkHeight);
-  queriedAttach = parent.base.GetBlockRange (forkHeight, num);
+  CHECK_GE (tipHeight, forkHeight);
+  num = std::min<unsigned> (num, tipHeight - forkHeight);
+  queriedAttach = parent.base.GetBlockRange (forkHeight + 1, num);
   if (queriedAttach.empty ())
     return;
 
@@ -718,11 +719,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
      detaches; in which case we will simply not send any attaches for now.
      The GSP's logic for recovering from missed ZMQ notifications takes care
      of that.  */
-  bool mismatch;
-  if (detach.empty ())
-    mismatch = (queriedAttach.front ().parent != from);
-  else
-    mismatch = (queriedAttach.front ().parent != detach.back ().parent);
+  const bool mismatch = (queriedAttach.front ().parent != forkPoint);
   if (mismatch)
     {
       LOG (WARNING)
