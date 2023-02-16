@@ -76,7 +76,8 @@ private:
 
   /**
    * Sends ZMQ notifications for block detach and attach operations
-   * starting from the given tip and onto the main chain.
+   * starting from the given tip and onto the main chain, optionally
+   * towards a given "to" block (assumed to be the tip if empty).
    *
    * If attaches is filled in, those blocks must go back at least to the
    * fork point, and will be used to send the attach notifications.  Otherwise
@@ -90,6 +91,7 @@ private:
    * This method may throw in case of a base-chain error.
    */
   void PushZmqBlocks (const std::string& from,
+                      const std::string& to,
                       const std::vector<BlockData>& attaches, unsigned num,
                       const std::string& reqtoken,
                       std::vector<BlockData>& detach,
@@ -403,8 +405,6 @@ Controller::RpcServer::game_sendupdates3 (const std::string& from,
      we just trigger "default" ones.  This works as GSPs track their games
      anyway, but it may send too many notifications.  */
 
-  CHECK_EQ (to, "");
-
   std::ostringstream reqtoken;
   {
     std::lock_guard<std::mutex> lock(mut);
@@ -416,7 +416,7 @@ Controller::RpcServer::game_sendupdates3 (const std::string& from,
   try
     {
       std::lock_guard<std::mutex> lock(run.mutChain);
-      run.PushZmqBlocks (from, {}, FLAGS_xayax_block_range, reqtoken.str (),
+      run.PushZmqBlocks (from, to, {}, FLAGS_xayax_block_range, reqtoken.str (),
                          detaches, attaches);
     }
   catch (const std::exception& exc)
@@ -585,7 +585,7 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
   std::vector<BlockData> detach, queriedAttach;
   try
     {
-      PushZmqBlocks (oldTip, attaches, 0, "", detach, queriedAttach);
+      PushZmqBlocks (oldTip, "", attaches, 0, "", detach, queriedAttach);
     }
   catch (const std::exception& exc)
     {
@@ -613,12 +613,19 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
 
 void
 Controller::RunData::PushZmqBlocks (const std::string& from,
+                                    const std::string& to,
                                     const std::vector<BlockData>& attaches,
                                     unsigned num,
                                     const std::string& reqtoken,
                                     std::vector<BlockData>& detach,
                                     std::vector<BlockData>& queriedAttach)
 {
+  /* This "dual-purpose" method may be called with an explicit "to" block
+     and no attaches from the game_sendupdates RPC, or with attaches but
+     then for sure without "to" for processing tip updates.  But it will never
+     be called with both set (which simplifies assumptions/logic below).  */
+  CHECK (to.empty () || attaches.empty ());
+
   /* If this is a sequence of the very first blocks / blocks re-imported
      not matching up to the current chain, just push the attach blocks.  */
   if (from.empty ())
@@ -679,11 +686,67 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
       forkPoint = detach.back ().parent;
     }
 
+  /* If we have an explicit "to" block, we assume that it is on the main
+     chain (anything else is not supported at least for now).  Then we have
+     three cases to consider:  The block is above the fork point -- send
+     some attaches (but only to that height and not tip).  The block is the
+     fork point -- all done.  The block is before the fork -- send more
+     detaches to it.  */
+  int64_t toHeight = -1;
+  if (!to.empty ())
+    {
+      toHeight = parent.base.GetMainchainHeight (to);
+      if (toHeight == -1)
+        {
+          LOG (WARNING)
+              << "Requested 'to' block " << to << " is not on the main chain";
+          return;
+        }
+
+      if (toHeight == static_cast<int64_t> (forkHeight))
+        {
+          LOG_IF (WARNING, to != forkPoint)
+              << "Mismatch between blocks " << to << " and " << forkPoint
+              << " at fork height " << forkHeight
+              << ", race condition?";
+          return;
+        }
+
+      if (toHeight < static_cast<int64_t> (forkHeight))
+        {
+          /* We need more detaches to reach the desired target block.
+             Query them as range on the main chain and then add in the
+             right order to detach.  */
+          num = std::min<unsigned> (num, forkHeight - toHeight);
+          const auto toDetach
+              = parent.base.GetBlockRange (forkHeight - num + 1, num);
+          if (toDetach.back ().hash != forkPoint)
+            {
+              LOG (WARNING)
+                  << "Mismatch for detach blocks towards 'to' with forkpoint "
+                  << forkPoint << ", race condition?";
+              return;
+            }
+          for (auto it = toDetach.rbegin (); it != toDetach.rend (); ++it)
+            {
+              detach.push_back (*it);
+              zmq.SendBlockDetach (*it, reqtoken);
+            }
+          return;
+        }
+
+      /* Otherwise, we do attaches as usual, but only to the toHeight at most.
+         This is handled in the normal flow below.  */
+      CHECK_GT (toHeight, forkHeight);
+    }
+
   /* If we have attach blocks already, look for the fork point in the
      list and send updates from there.  This is the case that applies
      during normal operation.  */
   if (!attaches.empty ())
     {
+      CHECK_EQ (toHeight, -1);
+
       /* A special case is if we just detached blocks.  In this case,
          the last attached block will be the new tip, and the parent
          of the last detached one.  */
@@ -708,9 +771,13 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
   /* Otherwise, this is the situation of an explicit RPC request for
      blocks.  We query the base chain for the attach blocks, up to
      the specified limit (or our chain tip).  */
-  const auto tipHeight = chain.GetTipHeight ();
-  CHECK_GE (tipHeight, forkHeight);
-  num = std::min<unsigned> (num, tipHeight - forkHeight);
+  uint64_t targetHeight;
+  if (toHeight == -1)
+    targetHeight = chain.GetTipHeight ();
+  else
+    targetHeight = toHeight;
+  CHECK_GE (targetHeight, forkHeight);
+  num = std::min<unsigned> (num, targetHeight - forkHeight);
   queriedAttach = parent.base.GetBlockRange (forkHeight + 1, num);
   if (queriedAttach.empty ())
     return;
@@ -718,7 +785,13 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
   /* It may happen that the chain returned does not actually match up with the
      detaches; in which case we will simply not send any attaches for now.
      The GSP's logic for recovering from missed ZMQ notifications takes care
-     of that.  */
+     of that.
+
+     Note that we do not check whether the *end* of the attaches matches
+     the explicit "to" block, if we have one.  This could also happen due
+     to a race condition, but in that case, the returned blocks are still
+     consistent and the GSP will just do another query again to move to
+     the "to" block afterwards (if possible).  */
   const bool mismatch = (queriedAttach.front ().parent != forkPoint);
   if (mismatch)
     {

@@ -21,6 +21,9 @@
 
 namespace xayax
 {
+
+DECLARE_int32 (xayax_block_range);
+
 namespace
 {
 
@@ -725,6 +728,100 @@ TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
     "detach": 0
   })"));
   ExpectZmq ({}, branch, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, ExplicitToBlock)
+{
+  /* ... chain0 - chain1 - chain2 - chain3 - chain4
+                              \ branch
+  */
+  const auto chain = base.AttachBranch (c.hash, 5);
+  const auto branch = base.SetTip (base.NewBlock (chain[2].hash));
+  WaitForZmqTip (branch);
+  base.SetTip (chain.back ());
+  WaitForZmqTip (chain.back ());
+
+  /* There are six basic scenarios to test:
+     (From a branch, From the chain) x (To behind, at, after the fork point)
+  */
+
+  auto upd = rpc.game_sendupdates3 (branch.hash, GAME_ID, chain[0].hash);
+  EXPECT_EQ (upd["toblock"], chain[0].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 3
+  })"));
+  ExpectZmq ({branch, chain[2], chain[1]}, {}, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates3 (branch.hash, GAME_ID, chain[2].hash);
+  EXPECT_EQ (upd["toblock"], chain[2].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 1
+  })"));
+  ExpectZmq ({branch}, {}, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates3 (branch.hash, GAME_ID, chain[3].hash);
+  EXPECT_EQ (upd["toblock"], chain[3].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 1,
+    "detach": 1
+  })"));
+  ExpectZmq ({branch}, {chain[3]}, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates3 (chain[2].hash, GAME_ID, chain[0].hash);
+  EXPECT_EQ (upd["toblock"], chain[0].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 2
+  })"));
+  ExpectZmq ({chain[2], chain[1]}, {}, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates3 (chain[2].hash, GAME_ID, chain[2].hash);
+  EXPECT_EQ (upd["toblock"], chain[2].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, {}, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates3 (chain[2].hash, GAME_ID, chain[3].hash);
+  EXPECT_EQ (upd["toblock"], chain[3].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 1,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, {chain[3]}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, BlockRange)
+{
+  FLAGS_xayax_block_range = 1;
+
+  /* ... chain0 - chain1 - chain2 - chain3 - chain4
+                              \ branch0 - branch1
+  */
+  const auto chain = base.AttachBranch (c.hash, 5);
+  const auto branch = base.AttachBranch (chain[2].hash, 2);
+  WaitForZmqTip (branch.back ());
+  base.SetTip (chain.back ());
+  WaitForZmqTip (chain.back ());
+
+  auto upd = rpc.game_sendupdates2 (branch[1].hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], chain[3].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 1,
+    "detach": 2
+  })"));
+  ExpectZmq ({branch[1], branch[0]}, {chain[3]}, upd["reqtoken"].asString ());
+
+  upd = rpc.game_sendupdates3 (branch[1].hash, GAME_ID, chain[0].hash);
+  EXPECT_EQ (upd["toblock"], chain[1].hash);
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 3
+  })"));
+  ExpectZmq ({branch[1], branch[0], chain[2]}, {}, upd["reqtoken"].asString ());
 }
 
 /* ************************************************************************** */
