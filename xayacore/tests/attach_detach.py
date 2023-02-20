@@ -53,6 +53,27 @@ if __name__ == "__main__":
                          reqtoken=data["reqtoken"])
       f.assertZmqBlocks (sub, "attach", branch1, reqtoken=data["reqtoken"])
 
+      data = xrpc.game_sendupdates (gameid="game", fromblock=branch2[-1],
+                                    toblock=branch1[3])
+      f.assertEqual (data["steps"], {
+        "detach": 5,
+        "attach": 4,
+      })
+      f.assertEqual (data["toblock"], branch1[3])
+      f.assertZmqBlocks (sub, "detach", branch2[::-1],
+                         reqtoken=data["reqtoken"])
+      f.assertZmqBlocks (sub, "attach", branch1[:4], reqtoken=data["reqtoken"])
+
+      data = xrpc.game_sendupdates (gameid="game", fromblock=branch1[-1],
+                                    toblock=base[3])
+      f.assertEqual (data["steps"], {
+        "detach": 16,
+        "attach": 0,
+      })
+      f.assertEqual (data["toblock"], base[3])
+      f.assertZmqBlocks (sub, "detach", branch1[::-1] + base[:3:-1],
+                         reqtoken=data["reqtoken"])
+
       # Make sure that the test was reasonably fast.  In particular, this
       # verifies that we did not rely on the periodic polling for new blocks,
       # and instead got notified about them by ZMQ.
