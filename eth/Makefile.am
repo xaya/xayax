@@ -37,10 +37,13 @@ noinst_HEADERS = \
 
 xayax_eth_CXXFLAGS = \
   -I$(top_srcdir)/src \
+  $(JSONCPP_CFLAGS) \
   $(WEBSOCKET_CFLAGS) $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
+xayax_eth_LDFLAGS = -pthread
 xayax_eth_LDADD = \
   $(builddir)/libethchain.la \
   $(top_builddir)/src/libxayax.la \
+  $(JSONCPP_LIBS) \
   $(WEBSOCKET_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS)
 xayax_eth_SOURCES = main.cpp
 
@@ -49,8 +52,10 @@ TESTS = tests-unit
 
 tests_unit_CXXFLAGS = \
   -I$(top_srcdir)/src \
+  $(JSONCPP_CFLAGS) \
   $(GLOG_CFLAGS) $(GTEST_CFLAGS)
 tests_unit_LDADD = $(builddir)/libethchain.la \
+  $(JSONCPP_LIBS) \
   $(GLOG_LIBS) $(GTEST_LIBS)
 tests_unit_SOURCES = \
   pending_tests.cpp

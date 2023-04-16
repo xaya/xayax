@@ -14,6 +14,7 @@ xayax_core_CXXFLAGS = \
   $(XAYAUTIL_CFLAGS) $(ETHUTILS_CFLAGS) \
   $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) $(ZMQ_CFLAGS) \
   $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
+xayax_core_LDFLAGS = -pthread
 xayax_core_LDADD = \
   $(top_builddir)/src/libxayax.la \
   $(XAYAUTIL_LIBS) $(ETHUTILS_LIBS) \
