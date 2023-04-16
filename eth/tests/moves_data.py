@@ -35,9 +35,9 @@ def mvid (f, ns, nm, nonce):
 
   moveEvent = reg.events.Move ()
   for ev in events:
-    proc = moveEvent.processLog (ev)
+    proc = moveEvent.process_log (ev)
     if proc["args"]["nonce"] == nonce:
-      return f.w3.keccak (hexstr=ev["data"]).hex ()[2:]
+      return f.w3.keccak (ev["data"]).hex ()[2:]
 
   raise AssertionError ("no move logs found for %s/%s nonce %d"
                           % (ns, nm, nonce))

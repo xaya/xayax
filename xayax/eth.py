@@ -525,7 +525,7 @@ class Environment:
     account = self.lookupSignerAccount (addr)
     assert account is not None, "%s is not a signer address" % addr
     full = "Xaya signature for chain %d:\n\n%s" \
-              % (self.ganache.w3.eth.chainId, msg)
+              % (self.ganache.w3.eth.chain_id, msg)
     encoded = messages.encode_defunct (text=full)
     rawSgn = account.sign_message (encoded).signature
     return codecs.decode (base64.b64encode (rawSgn), "ascii")

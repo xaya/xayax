@@ -27,7 +27,7 @@ if __name__ == "__main__":
     xrpc = jsonrpclib.ServerProxy (f.env.getXRpcUrl ())
 
     msg = "Test \00Message"
-    fullMsg = "Xaya signature for chain %d:\n\n%s" % (f.w3.eth.chainId, msg)
+    fullMsg = "Xaya signature for chain %d:\n\n%s" % (f.w3.eth.chain_id, msg)
     account = Account.create ()
     encoded = messages.encode_defunct (text=fullMsg)
     rawSgn = account.sign_message (encoded).signature
