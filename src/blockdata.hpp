@@ -73,16 +73,7 @@ struct MoveData
     return !(a == b);
   }
 
-  friend std::ostream&
-  operator<< (std::ostream& out, const MoveData& x)
-  {
-    out << "Move " << x.txid << ":\n";
-    out << "  " << x.ns << "/" << x.name << "\n";
-    out << "  " << x.mv << "\n";
-    out << "  with " << x.burns.size () << " burns\n";
-    out << "  metadata:\n" << x.metadata;
-    return out;
-  }
+  friend std::ostream& operator<< (std::ostream& out, const MoveData& x);
 
 };
 
@@ -124,6 +115,18 @@ struct BlockData
 
   BlockData& operator= (const BlockData&) = default;
   BlockData& operator= (BlockData&&) = default;
+
+  /**
+   * Serialises the BlockData instance to a string of bytes (e.g. for storing
+   * in a database).
+   */
+  std::string Serialise () const;
+
+  /**
+   * Deserialises from a string of bytes into this instance.  CHECK fails if
+   * there is an error.
+   */
+  void Deserialise (const std::string& data);
 
   friend bool operator== (const BlockData& a, const BlockData& b)
   {
