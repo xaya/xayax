@@ -1,8 +1,10 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "private/chainstate.hpp"
+
+#include "private/jsonutils.hpp"
 
 #include <glog/logging.h>
 
@@ -116,7 +118,7 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
   stmt.Bind (3, blk.height);
   stmt.Bind (4, branch);
   stmt.Bind (5, blk.rngseed);
-  stmt.Bind (6, blk.metadata);
+  stmt.Bind (6, StoreJson (blk.metadata));
   stmt.Execute ();
 
   for (const auto& m : blk.moves)
@@ -135,8 +137,8 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
       ins.Bind (3, m.ns);
       ins.Bind (4, m.name);
       ins.Bind (5, m.mv);
-      ins.Bind (6, burnsJson);
-      ins.Bind (7, m.metadata);
+      ins.Bind (6, StoreJson (burnsJson));
+      ins.Bind (7, StoreJson (m.metadata));
       ins.Execute ();
     }
 }
@@ -477,7 +479,7 @@ Chainstate::GetForkBranch (const std::string& hash,
           blk.parent = stmt.Get<std::string> (1);
           blk.height = stmt.Get<uint64_t> (2);
           blk.rngseed = stmt.Get<std::string> (3);
-          blk.metadata = stmt.Get<Json::Value> (4);
+          blk.metadata = LoadJson (stmt.Get<std::string> (4));
 
           auto moves = PrepareRo (R"(
             SELECT `txid`, `ns`, `name`, `mv`, `burns`, `metadata`
@@ -493,9 +495,9 @@ Chainstate::GetForkBranch (const std::string& hash,
               m.ns = moves.Get<std::string> (1);
               m.name = moves.Get<std::string> (2);
               m.mv = moves.Get<std::string> (3);
-              m.metadata = moves.Get<Json::Value> (5);
+              m.metadata = LoadJson (moves.Get<std::string> (5));
 
-              const auto burnsJson = moves.Get<Json::Value> (4);
+              const auto burnsJson = LoadJson (moves.Get<std::string> (4));
               CHECK (burnsJson.isObject ());
               for (auto it = burnsJson.begin (); it != burnsJson.end (); ++it)
                 {

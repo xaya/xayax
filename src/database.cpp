@@ -4,12 +4,9 @@
 
 #include "private/database.hpp"
 
-#include <json/json.h>
-
 #include <glog/logging.h>
 
 #include <limits>
-#include <sstream>
 
 namespace xayax
 {
@@ -256,20 +253,6 @@ template <>
             SQLITE_OK);
 }
 
-template <>
-  void
-  Database::Statement::Bind<Json::Value> (const int ind, const Json::Value& val)
-{
-  Json::StreamWriterBuilder wbuilder;
-  wbuilder["commentStyle"] = "None";
-  wbuilder["indentation"] = "";
-  wbuilder["enableYAMLCompatibility"] = false;
-  wbuilder["dropNullPlaceholders"] = false;
-  wbuilder["useSpecialFloats"] = false;
-
-  Bind (ind, Json::writeString (wbuilder, val));
-}
-
 bool
 Database::Statement::IsNull (const int ind) const
 {
@@ -303,27 +286,6 @@ template <>
   const unsigned char* str = sqlite3_column_text (**this, ind);
   CHECK (str != nullptr);
   return std::string (reinterpret_cast<const char*> (str), len);
-}
-
-template <>
-  Json::Value
-  Database::Statement::Get<Json::Value> (const int ind) const
-{
-  const auto serialised = Get<std::string> (ind);
-
-  Json::CharReaderBuilder rbuilder;
-  rbuilder["allowComments"] = false;
-  rbuilder["strictRoot"] = false;
-  rbuilder["failIfExtra"] = true;
-  rbuilder["rejectDupKeys"] = true;
-
-  Json::Value res;
-  std::string parseErrs;
-  std::istringstream in(serialised);
-  CHECK (Json::parseFromStream (rbuilder, in, &res, &parseErrs))
-      << "Invalid JSON in database: " << parseErrs << "\n" << serialised;
-
-  return res;
 }
 
 /* ************************************************************************** */

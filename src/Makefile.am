@@ -25,6 +25,7 @@ libxayax_la_SOURCES = \
   controller.cpp \
   chainstate.cpp \
   database.cpp \
+  jsonutils.cpp \
   pending.cpp \
   rpcutils.cpp \
   sync.cpp \
@@ -37,6 +38,7 @@ xayax_HEADERS = \
 noinst_HEADERS = \
   private/database.hpp \
   private/chainstate.hpp \
+  private/jsonutils.hpp \
   private/pending.hpp \
   private/sync.hpp \
   private/zmqpub.hpp \
@@ -58,6 +60,7 @@ check_HEADERS = testutils.hpp
 tests_SOURCES = testutils.cpp \
   chainstate_tests.cpp \
   controller_tests.cpp \
+  jsonutils_tests.cpp \
   pending_tests.cpp \
   rpcutils_tests.cpp \
   sync_tests.cpp \
