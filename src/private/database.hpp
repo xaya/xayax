@@ -71,6 +71,11 @@ public:
    */
   Statement PrepareRo (const std::string& sql) const;
 
+  /**
+   * Returns the number of rows modified in the most recent update statement.
+   */
+  unsigned RowsModified () const;
+
 };
 
 /**
@@ -188,6 +193,11 @@ public:
     void Bind (int ind, const T& val);
 
   /**
+   * Binds a BLOB value (not TEXT as is otherwise done for std::string).
+   */
+  void BindBlob (int ind, const std::string& val);
+
+  /**
    * Checks if the numbered column is NULL in the current row.
    */
   bool IsNull (int ind) const;
@@ -198,6 +208,11 @@ public:
    */
   template <typename T>
     T Get (int ind) const;
+
+  /**
+   * Extracts a BLOB value as byte string.
+   */
+  std::string GetBlob (int ind) const;
 
 };
 

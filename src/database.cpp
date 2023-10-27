@@ -124,6 +124,14 @@ Database::PrepareRo (const std::string& sql) const
   return res;
 }
 
+unsigned
+Database::RowsModified () const
+{
+  const int res = sqlite3_changes (db);
+  CHECK_GE (res, 0);
+  return res;
+}
+
 /* ************************************************************************** */
 
 Database::CachedStatement::~CachedStatement ()
@@ -253,6 +261,14 @@ template <>
             SQLITE_OK);
 }
 
+void
+Database::Statement::BindBlob (const int ind, const std::string& val)
+{
+  CHECK_EQ (sqlite3_bind_blob (**this, ind, val.data (), val.size (),
+                               SQLITE_TRANSIENT),
+            SQLITE_OK);
+}
+
 bool
 Database::Statement::IsNull (const int ind) const
 {
@@ -279,13 +295,25 @@ template <>
   std::string
   Database::Statement::Get<std::string> (const int ind) const
 {
+  const unsigned char* str = sqlite3_column_text (**this, ind);
   const int len = sqlite3_column_bytes (**this, ind);
   if (len == 0)
     return std::string ();
 
-  const unsigned char* str = sqlite3_column_text (**this, ind);
   CHECK (str != nullptr);
   return std::string (reinterpret_cast<const char*> (str), len);
+}
+
+std::string
+Database::Statement::GetBlob (const int ind) const
+{
+  const void* data = sqlite3_column_blob (**this, ind);
+  const int len = sqlite3_column_bytes (**this, ind);
+  if (len == 0)
+    return std::string ();
+
+  CHECK (data != nullptr);
+  return std::string (reinterpret_cast<const char*> (data), len);
 }
 
 /* ************************************************************************** */
