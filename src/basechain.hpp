@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -62,7 +62,7 @@ public:
    * Sets a callbacks instance that will receive notifications about
    * new blocks and transactions.
    */
-  void SetCallbacks (Callbacks* c);
+  virtual void SetCallbacks (Callbacks* c);
 
   /**
    * Called after the instance is created and before it is getting used.

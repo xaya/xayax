@@ -27,6 +27,7 @@ libxayax_la_LIBADD = \
   -lstdc++fs
 libxayax_la_SOURCES = \
   basechain.cpp \
+  blockcache.cpp \
   blockdata.cpp \
   controller.cpp \
   chainstate.cpp \
@@ -39,6 +40,7 @@ libxayax_la_SOURCES = \
   $(PROTOSOURCES)
 xayax_HEADERS = \
   basechain.hpp \
+  blockcache.hpp \
   blockdata.hpp \
   controller.hpp \
   rpcutils.hpp
@@ -65,6 +67,7 @@ tests_LDADD = $(builddir)/libxayax.la \
   -lstdc++fs
 check_HEADERS = testutils.hpp
 tests_SOURCES = testutils.cpp \
+  blockcache_tests.cpp \
   blockdata_tests.cpp \
   chainstate_tests.cpp \
   controller_tests.cpp \
