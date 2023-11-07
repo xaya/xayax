@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,7 @@
 #include "websocket.hpp"
 
 #include "basechain.hpp"
+#include "rpcutils.hpp"
 
 #include <eth-utils/abi.hpp>
 #include <eth-utils/ecdsa.hpp>
@@ -44,6 +45,9 @@ private:
    * that they work in a thread-safe way without any fuss.
    */
   const std::string endpoint;
+
+  /** Pre-parsed headers for RPC requests.  */
+  const RpcHeaders headers;
 
   /** Contract address of the Xaya account registry.  */
   std::string accountsContract;

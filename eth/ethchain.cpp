@@ -6,7 +6,6 @@
 
 #include "contract-constants.hpp"
 #include "hexutils.hpp"
-#include "rpcutils.hpp"
 
 #include "rpc-stubs/ethrpcclient.h"
 
@@ -36,6 +35,8 @@ DEFINE_int32 (ethchain_fast_logs_depth, 1'024,
 
 DEFINE_int32 (eth_rpc_timeout_ms, 10'000,
               "timeout for RPC calls to the EVM node");
+DEFINE_string (eth_rpc_headers, "",
+               "extra headers to send with EVM JSON-RPC requests");
 
 /* ************************************************************************** */
 
@@ -45,10 +46,11 @@ class EthChain::EthRpc
 
 public:
 
-  EthRpc (const std::string& ep)
-    : RpcClient(ep)
+  EthRpc (const EthChain& parent)
+    : RpcClient(parent.endpoint)
   {
     SetTimeout (std::chrono::milliseconds (FLAGS_eth_rpc_timeout_ms));
+    AddHeaders (parent.headers);
   }
 
 };
@@ -182,7 +184,7 @@ GetMoveDataFromLogs (AbiDecoder& dec)
 EthChain::EthChain (const std::string& httpEndpoint,
                     const std::string& wsEndpoint,
                     const std::string& acc)
-  : endpoint(httpEndpoint)
+  : endpoint(httpEndpoint), headers(ParseRpcHeaders (FLAGS_eth_rpc_headers))
 {
   if (wsEndpoint.empty ())
     LOG (WARNING) << "Not using WebSocket subscriptions";
@@ -196,7 +198,7 @@ EthChain::EthChain (const std::string& httpEndpoint,
   CHECK (accAddr) << "Accounts contract address is invalid";
   accountsContract = accAddr.GetLowerCase ();
 
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   chainId = AbiDecoder::ParseInt (rpc->eth_chainId ());
 }
 
@@ -215,7 +217,7 @@ EthChain::NewPendingTx (const std::string& txid)
   CHECK (pending != nullptr)
       << "Pending move received, but tracking is not turned on";
 
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   std::vector<MoveData> moves;
   try
     {
@@ -240,7 +242,7 @@ EthChain::NewPendingTx (const std::string& txid)
 void
 EthChain::Start ()
 {
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   LOG (INFO) << "Connected to " << rpc->web3_clientVersion ();
 
   if (sub != nullptr)
@@ -251,7 +253,7 @@ bool
 EthChain::EnablePending ()
 {
   CHECK (pending == nullptr) << "Already tracking pending moves";
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   pending = std::make_unique<PendingDataExtractor> (*rpc, accountsContract);
   if (sub != nullptr)
     sub->EnablePending ();
@@ -507,7 +509,7 @@ EthChain::AddMovesFromHeightRange (EthRpc& rpc,
 uint64_t
 EthChain::GetTipHeight ()
 {
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   return AbiDecoder::ParseInt (rpc->eth_blockNumber ());
 }
 
@@ -517,7 +519,7 @@ EthChain::GetBlockRange (const uint64_t start, const uint64_t count)
   if (count == 0)
     return {};
 
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
 
   const uint64_t endHeight = start + count - 1;
   CHECK_GE (endHeight, start);
@@ -539,7 +541,7 @@ EthChain::GetMainchainHeight (const std::string& hash)
 {
   const std::string prefixHash = "0x" + hash;
 
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
 
   /* There seems to be no direct way of getting the number of main-chain
      confirmations for a block.  But we can query for the block by hash
@@ -579,7 +581,7 @@ EthChain::GetMainchainHeight (const std::string& hash)
 std::vector<std::string>
 EthChain::GetMempool ()
 {
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   return mempool.GetContent (*rpc);
 }
 
@@ -604,7 +606,7 @@ EthChain::VerifyMessage (const std::string& msg, const std::string& signature,
 std::string
 EthChain::GetChain ()
 {
-  EthRpc rpc(endpoint);
+  EthRpc rpc(*this);
   const auto mit = CHAIN_IDS.find (chainId);
   CHECK (mit != CHAIN_IDS.end ()) << "Unknown Ethereum chain ID: " << chainId;
   return mit->second;

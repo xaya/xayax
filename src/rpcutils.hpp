@@ -9,10 +9,20 @@
 #include <jsonrpccpp/client/connectors/httpclient.h>
 
 #include <chrono>
+#include <map>
 #include <string>
 
 namespace xayax
 {
+
+/** A list of headers that can be added to the requests.  */
+using RpcHeaders = std::map<std::string, std::string>;
+
+/**
+ * Parses a string into a list of headers.  The format is:
+ *  header1=value1;header2=value2;...
+ */
+RpcHeaders ParseRpcHeaders (const std::string& str);
 
 /**
  * Simple wrapper around a JSON-RPC connection to some HTTP endpoint.
@@ -46,6 +56,16 @@ public:
   {
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds> (val);
     http.SetTimeout (ms.count ());
+  }
+
+  /**
+   * Adds a list of headers to be sent.
+   */
+  void
+  AddHeaders (const RpcHeaders& headers)
+  {
+    for (const auto& h : headers)
+      http.AddHeader (h.first, h.second);
   }
 
   T&
