@@ -6,6 +6,7 @@ TEST_LIBRARY = ethtest.py
 
 REGTESTS = \
   attach_detach.py \
+  blockcache.py \
   block_data.py \
   moves_data.py \
   moves_multi.py \
