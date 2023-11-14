@@ -42,6 +42,8 @@ AX_PKG_CHECK_MODULES([GLOG], [], [libglog])
 AX_PKG_CHECK_MODULES([PROTOBUF], [], [protobuf])
 AX_PKG_CHECK_MODULES([SQLITE3], [], [sqlite3])
 AX_PKG_CHECK_MODULES([UNIVALUE], [], [libunivalue])
+AX_PKG_CHECK_MODULES([MYPP], [], [mypp])
+AX_PKG_CHECK_MODULES([MARIADB], [], [mariadb])
 # We use the recv variant taking message_t& over deprecated older functions,
 # which requires at least version 4.3.1.
 AX_PKG_CHECK_MODULES([ZMQ], [], [libzmq >= 4.3.1])

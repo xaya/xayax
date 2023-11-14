@@ -18,17 +18,20 @@ libxayax_la_CXXFLAGS = \
   $(XAYAUTIL_CFLAGS) \
   $(JSONCPP_CFLAGS) $(JSONRPCSERVER_CFLAGS) \
   $(ZMQ_CFLAGS) $(SQLITE3_CFLAGS) $(UNIVALUE_CFLAGS) \
+  $(MYPP_CFLAGS) $(MARIADB_CFLAGS) \
   $(PROTOBUF_CFLAGS) $(GFLAGS_CFLAGS) $(GLOG_CFLAGS)
 libxayax_la_LIBADD = \
   $(XAYAUTIL_LIBS) \
   $(JSONCPP_LIBS) $(JSONRPCSERVER_LIBS) \
   $(ZMQ_LIBS) $(SQLITE3_LIBS) $(UNIVALUE_LIBS) \
+  $(MYPP_LIBS) $(MARIADB_LIBS) \
   $(PROTOBUF_LIBS) $(GFLAGS_LIBS) $(GLOG_LIBS) \
   -lstdc++fs
 libxayax_la_SOURCES = \
   basechain.cpp \
   blockcache.cpp \
   blockdata.cpp \
+  cache/mysql.cpp \
   controller.cpp \
   chainstate.cpp \
   database.cpp \
@@ -59,10 +62,12 @@ TESTS = tests
 tests_CXXFLAGS = \
   $(JSONCPP_CFLAGS) $(JSONRPCCLIENT_CFLAGS) \
   $(ZMQ_CFLAGS) $(SQLITE3_CFLAGS) $(GLOG_CFLAGS) \
+  $(MYPP_CFLAGS) $(MARIADB_CFLAGS) \
   $(GTEST_CFLAGS)
 tests_LDADD = $(builddir)/libxayax.la \
   $(JSONCPP_LIBS) $(JSONRPCCLIENT_LIBS) \
   $(ZMQ_LIBS) $(SQLITE3_LIBS) $(GLOG_LIBS) \
+  $(MYPP_LIBS) $(MARIADB_LIBS) \
   $(GTEST_LIBS) \
   -lstdc++fs
 check_HEADERS = testutils.hpp

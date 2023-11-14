@@ -46,6 +46,8 @@ DEFINE_bool (sanity_checks, false,
 
 DEFINE_bool (blockcache_memory, false,
              "if enabled, cache blocks in memory (useful for testing)");
+DEFINE_string (blockcache_mysql, "",
+               "if set to a mysql:// URL, use it as block cache");
 
 /**
  * Parses the comma-separated list of addresses and adds them to the
@@ -107,6 +109,19 @@ main (int argc, char* argv[])
           LOG (WARNING)
               << "Using in-memory block cache,"
                  " which should be used only for testing";
+        }
+      if (!FLAGS_blockcache_mysql.empty ())
+        {
+          if (cacheStore != nullptr)
+            throw std::runtime_error ("only one block cache can be chosen");
+          std::string host, user, password, db, tbl;
+          unsigned port;
+          if (!xayax::MySqlBlockStorage::ParseUrl (
+                  FLAGS_blockcache_mysql, host, port, user, password, db, tbl))
+            throw std::runtime_error ("--blockcache_mysql is invalid");
+          cacheStore = std::make_unique<xayax::MySqlBlockStorage> (
+              host, port, user, password, db, tbl);
+          LOG (INFO) << "Using MySQL server at " << host << " as block cache";
         }
       std::unique_ptr<xayax::BlockCacheChain> cache;
       if (cacheStore != nullptr)

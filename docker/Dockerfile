@@ -17,6 +17,7 @@ RUN apk add --no-cache \
   git \
   gflags-dev \
   libtool \
+  mariadb-dev \
   npm \
   pkgconfig \
   py3-pip \
@@ -53,6 +54,13 @@ ARG ETHUTILS_VERSION="master"
 WORKDIR /usr/src/ethutils
 RUN git clone -b ${ETHUTILS_VERSION} \
   https://github.com/xaya/eth-utils .
+RUN ./autogen.sh && ./configure && make && make install-strip
+
+# Build and install mypp.
+ARG MYPP_VERSION="master"
+WORKDIR /usr/src/mypp
+RUN git clone -b ${MYPP_VERSION} \
+  https://github.com/xaya/mypp .
 RUN ./autogen.sh && ./configure && make && make install-strip
 
 # Build and install Xaya X itself.  Make sure to clean out any

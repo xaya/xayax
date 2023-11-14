@@ -8,6 +8,7 @@
 #include "basechain.hpp"
 
 #include <map>
+#include <memory>
 
 namespace xayax
 {
@@ -123,6 +124,54 @@ public:
 
   void Store (const std::vector<BlockData>& blocks) override;
   std::vector<BlockData> GetRange (uint64_t start, uint64_t count) override;
+
+};
+
+/**
+ * An implementation of the BlockCacheChain::Storage that uses a MariaDB
+ * or MySQL database for storing and retrieving cached blocks.
+ */
+class MySqlBlockStorage : public BlockCacheChain::Storage
+{
+
+private:
+
+  class Implementation;
+
+  /**
+   * The implementation, which depends on the MariaDB connector library that
+   * is hidden from the public header here.
+   */
+  std::unique_ptr<Implementation> impl;
+
+public:
+
+  /**
+   * Opens a connection to the given MySQL server and uses it to cache
+   * the blocks.  Note that the right schema (see cache/mysql.cpp) must
+   * be set up already and the table exist.
+   */
+  MySqlBlockStorage (const std::string& host, unsigned port,
+                     const std::string& user, const std::string& password,
+                     const std::string& db, const std::string& tbl);
+
+  ~MySqlBlockStorage ();
+
+  void Store (const std::vector<BlockData>& blocks) override;
+  std::vector<BlockData> GetRange (uint64_t start, uint64_t count) override;
+
+  /**
+   * Helper function that parses a URL string into the components needed
+   * to construct a MySqlBlockStorage instance.  The string has the
+   * following form:
+   *    mysql://user:password@host:port/database/table
+   *
+   * Returns true if successful, false if the format is invalid.
+   */
+  static bool ParseUrl (const std::string& url,
+                        std::string& host, unsigned& port,
+                        std::string& user, std::string& password,
+                        std::string& db, std::string& tbl);
 
 };
 
