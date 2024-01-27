@@ -1,0 +1,36 @@
+// Copyright (C) 2023 The Xaya developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+syntax = "proto3";
+
+package xayax.proto;
+
+/**
+ * Data about a move (name update) taking place in the blockchain.
+ * This is a "mirror" of the MoveData struct, able to carry and
+ * serialise all the data inside a MoveData.
+ */
+message Move
+{
+  string txid = 1;
+  string ns = 2;
+  string name = 3;
+  string mv = 4;
+  map<string, string> burns = 5;
+  string metadata = 6;
+}
+
+/**
+ * Basic data about a block, including its header and any relevant moves.
+ * This mimics the BlockData struct for serialisation.
+ */
+message Block
+{
+  string hash = 1;
+  string parent = 2;
+  uint64 height = 3;
+  string rngseed = 4;
+  string metadata = 5;
+  repeated Move moves = 6;
+}

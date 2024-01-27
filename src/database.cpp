@@ -4,12 +4,9 @@
 
 #include "private/database.hpp"
 
-#include <json/json.h>
-
 #include <glog/logging.h>
 
 #include <limits>
-#include <sstream>
 
 namespace xayax
 {
@@ -124,6 +121,14 @@ Database::PrepareRo (const std::string& sql) const
       << " for:\n" << sql;
   statements.emplace (sql, std::move (entry));
 
+  return res;
+}
+
+unsigned
+Database::RowsModified () const
+{
+  const int res = sqlite3_changes (db);
+  CHECK_GE (res, 0);
   return res;
 }
 
@@ -256,18 +261,12 @@ template <>
             SQLITE_OK);
 }
 
-template <>
-  void
-  Database::Statement::Bind<Json::Value> (const int ind, const Json::Value& val)
+void
+Database::Statement::BindBlob (const int ind, const std::string& val)
 {
-  Json::StreamWriterBuilder wbuilder;
-  wbuilder["commentStyle"] = "None";
-  wbuilder["indentation"] = "";
-  wbuilder["enableYAMLCompatibility"] = false;
-  wbuilder["dropNullPlaceholders"] = false;
-  wbuilder["useSpecialFloats"] = false;
-
-  Bind (ind, Json::writeString (wbuilder, val));
+  CHECK_EQ (sqlite3_bind_blob (**this, ind, val.data (), val.size (),
+                               SQLITE_TRANSIENT),
+            SQLITE_OK);
 }
 
 bool
@@ -296,34 +295,25 @@ template <>
   std::string
   Database::Statement::Get<std::string> (const int ind) const
 {
+  const unsigned char* str = sqlite3_column_text (**this, ind);
   const int len = sqlite3_column_bytes (**this, ind);
   if (len == 0)
     return std::string ();
 
-  const unsigned char* str = sqlite3_column_text (**this, ind);
   CHECK (str != nullptr);
   return std::string (reinterpret_cast<const char*> (str), len);
 }
 
-template <>
-  Json::Value
-  Database::Statement::Get<Json::Value> (const int ind) const
+std::string
+Database::Statement::GetBlob (const int ind) const
 {
-  const auto serialised = Get<std::string> (ind);
+  const void* data = sqlite3_column_blob (**this, ind);
+  const int len = sqlite3_column_bytes (**this, ind);
+  if (len == 0)
+    return std::string ();
 
-  Json::CharReaderBuilder rbuilder;
-  rbuilder["allowComments"] = false;
-  rbuilder["strictRoot"] = false;
-  rbuilder["failIfExtra"] = true;
-  rbuilder["rejectDupKeys"] = true;
-
-  Json::Value res;
-  std::string parseErrs;
-  std::istringstream in(serialised);
-  CHECK (Json::parseFromStream (rbuilder, in, &res, &parseErrs))
-      << "Invalid JSON in database: " << parseErrs << "\n" << serialised;
-
-  return res;
+  CHECK (data != nullptr);
+  return std::string (reinterpret_cast<const char*> (data), len);
 }
 
 /* ************************************************************************** */

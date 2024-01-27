@@ -1,8 +1,10 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "private/chainstate.hpp"
+
+#include "private/jsonutils.hpp"
 
 #include <glog/logging.h>
 
@@ -31,42 +33,13 @@ SetupSchema (Database& db)
       -- for other branches, the integer indicates the branch.
       `branch` INTEGER NOT NULL,
 
-      -- The RNG seed as hex string.
-      `rngseed` TEXT NOT NULL,
-
-      -- Extra data for the block (e.g. timestamp or RNG seed) that
-      -- is just passed along to GSPs, stored as serialised JSON.
-      `metadata` TEXT NULL,
+      -- All the other block data (including moves), which is just
+      -- stored and passed on to GSPs but not needed internally.
+      `data` BLOB NOT NULL,
 
       UNIQUE (`branch`, `height`)
 
     );
-
-    -- Data of moves for blocks that have not been pruned yet.
-    CREATE TABLE IF NOT EXISTS `moves` (
-
-      -- Auto-assigned ID, which we mainly use to order moves within
-      -- a given block.
-      `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-
-      -- The block hash this corresponds to.
-      `block` TEXT NOT NULL,
-
-      `txid` TEXT NOT NULL,
-      `ns` TEXT NOT NULL,
-      `name` TEXT NOT NULL,
-      `mv` TEXT NOT NULL,
-
-      -- Burn data is stored as a serialised JSON object for
-      -- simplicity.
-      `burns` TEXT NOT NULL,
-
-      `metadata` TEXT NOT NULL
-
-    );
-
-    CREATE INDEX IF NOT EXISTS `moves_by_block`
-        ON `moves` (`block`, `id`);
 
     -- Base metadata variables as a general key/value store.
     CREATE TABLE IF NOT EXISTS `variables` (
@@ -108,37 +81,15 @@ InsertBlock (Database& db, const BlockData& blk, const uint64_t branch)
 {
   auto stmt = db.Prepare (R"(
     INSERT INTO `blocks`
-      (`hash`, `parent`, `height`, `branch`, `rngseed`, `metadata`)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      (`hash`, `parent`, `height`, `branch`, `data`)
+      VALUES (?1, ?2, ?3, ?4, ?5)
   )");
   stmt.Bind (1, blk.hash);
   stmt.Bind (2, blk.parent);
   stmt.Bind (3, blk.height);
   stmt.Bind (4, branch);
-  stmt.Bind (5, blk.rngseed);
-  stmt.Bind (6, blk.metadata);
+  stmt.BindBlob (5, blk.Serialise ());
   stmt.Execute ();
-
-  for (const auto& m : blk.moves)
-    {
-      Json::Value burnsJson(Json::objectValue);
-      for (const auto& entry : m.burns)
-        burnsJson[entry.first] = entry.second;
-
-      auto ins = db.Prepare (R"(
-        INSERT INTO `moves`
-          (`block`, `txid`, `ns`, `name`, `mv`, `burns`, `metadata`)
-          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-      )");
-      ins.Bind (1, blk.hash);
-      ins.Bind (2, m.txid);
-      ins.Bind (3, m.ns);
-      ins.Bind (4, m.name);
-      ins.Bind (5, m.mv);
-      ins.Bind (6, burnsJson);
-      ins.Bind (7, m.metadata);
-      ins.Execute ();
-    }
 }
 
 /**
@@ -462,7 +413,7 @@ Chainstate::GetForkBranch (const std::string& hash,
         return true;
 
       stmt = PrepareRo (R"(
-        SELECT `hash`, `parent`, `height`, `rngseed`, `metadata`
+        SELECT `hash`, `parent`, `height`, `data`
           FROM `blocks`
           WHERE `branch` = ?1 AND `height` <= ?2
           ORDER BY `height` DESC
@@ -473,39 +424,10 @@ Chainstate::GetForkBranch (const std::string& hash,
       while (stmt.Step ())
         {
           BlockData blk;
-          blk.hash = stmt.Get<std::string> (0);
-          blk.parent = stmt.Get<std::string> (1);
-          blk.height = stmt.Get<uint64_t> (2);
-          blk.rngseed = stmt.Get<std::string> (3);
-          blk.metadata = stmt.Get<Json::Value> (4);
-
-          auto moves = PrepareRo (R"(
-            SELECT `txid`, `ns`, `name`, `mv`, `burns`, `metadata`
-              FROM `moves`
-              WHERE `block` = ?1
-              ORDER BY `id` ASC
-          )");
-          moves.Bind (1, blk.hash);
-          while (moves.Step ())
-            {
-              MoveData m;
-              m.txid = moves.Get<std::string> (0);
-              m.ns = moves.Get<std::string> (1);
-              m.name = moves.Get<std::string> (2);
-              m.mv = moves.Get<std::string> (3);
-              m.metadata = moves.Get<Json::Value> (5);
-
-              const auto burnsJson = moves.Get<Json::Value> (4);
-              CHECK (burnsJson.isObject ());
-              for (auto it = burnsJson.begin (); it != burnsJson.end (); ++it)
-                {
-                  CHECK (it.key ().isString ());
-                  CHECK (m.burns.emplace (it.key ().asString (), *it).second);
-                }
-
-              blk.moves.emplace_back (std::move (m));
-            }
-
+          blk.Deserialise (stmt.GetBlob (3));
+          CHECK_EQ (blk.hash, stmt.Get<std::string> (0));
+          CHECK_EQ (blk.parent, stmt.Get<std::string> (1));
+          CHECK_EQ (blk.height, stmt.Get<uint64_t> (2));
           branch.emplace_back (std::move (blk));
         }
 
@@ -516,28 +438,7 @@ Chainstate::GetForkBranch (const std::string& hash,
 void
 Chainstate::Prune (const uint64_t untilHeight)
 {
-  auto query = PrepareRo (R"(
-    SELECT `hash`
-      FROM `blocks`
-      WHERE `branch` = 0 AND `height` <= ?1
-  )");
-  query.Bind (1, untilHeight);
-
   UpdateBatch upd(*this);
-
-  unsigned cnt = 0;
-  while (query.Step ())
-    {
-      ++cnt;
-      const auto hash = query.Get<std::string> (0);
-
-      auto stmt = Prepare (R"(
-        DELETE FROM `moves`
-          WHERE `block` = ?1
-      )");
-      stmt.Bind (1, hash);
-      stmt.Execute ();
-    }
 
   auto stmt = Prepare (R"(
     DELETE FROM `blocks`
@@ -548,6 +449,7 @@ Chainstate::Prune (const uint64_t untilHeight)
 
   upd.Commit ();
 
+  const unsigned cnt = RowsModified ();
   LOG_IF (INFO, cnt > 0)
       << "Pruned " << cnt << " blocks until height " << untilHeight;
 }
@@ -594,7 +496,7 @@ Chainstate::SanityCheck () const
         }
 
       stmt = PrepareRo (R"(
-        SELECT `hash`, `parent`, `height`
+        SELECT `hash`, `parent`, `height`, `data`
           FROM `blocks`
           WHERE `branch` = ?1
           ORDER BY `height` DESC
@@ -609,6 +511,12 @@ Chainstate::SanityCheck () const
           const auto hash = stmt.Get<std::string> (0);
           const auto parent = stmt.Get<std::string> (1);
           const int64_t height = stmt.Get<uint64_t> (2);
+
+          BlockData blk;
+          blk.Deserialise (stmt.GetBlob (3));
+          CHECK_EQ (blk.hash, hash);
+          CHECK_EQ (blk.parent, parent);
+          CHECK_EQ (blk.height, height);
 
           if (lastHeight != -1)
             {

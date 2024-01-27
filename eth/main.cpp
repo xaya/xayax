@@ -1,9 +1,10 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "config.h"
 
+#include "blockcache.hpp"
 #include "controller.hpp"
 
 #include "ethchain.hpp"
@@ -42,6 +43,11 @@ DEFINE_string (watch_for_pending_moves, "",
                " for pending moves");
 DEFINE_bool (sanity_checks, false,
              "whether or not to run slow sanity checks for testing");
+
+DEFINE_bool (blockcache_memory, false,
+             "if enabled, cache blocks in memory (useful for testing)");
+DEFINE_string (blockcache_mysql, "",
+               "if set to a mysql:// URL, use it as block cache");
 
 /**
  * Parses the comma-separated list of addresses and adds them to the
@@ -94,7 +100,39 @@ main (int argc, char* argv[])
                            FLAGS_accounts_contract);
       base.Start ();
 
-      xayax::Controller controller(base, FLAGS_datadir);
+      std::unique_ptr<xayax::BlockCacheChain::Storage> cacheStore;
+      if (FLAGS_blockcache_memory)
+        {
+          if (cacheStore != nullptr)
+            throw std::runtime_error ("only one block cache can be chosen");
+          cacheStore = std::make_unique<xayax::InMemoryBlockStorage> ();
+          LOG (WARNING)
+              << "Using in-memory block cache,"
+                 " which should be used only for testing";
+        }
+      if (!FLAGS_blockcache_mysql.empty ())
+        {
+          if (cacheStore != nullptr)
+            throw std::runtime_error ("only one block cache can be chosen");
+          std::string host, user, password, db, tbl;
+          unsigned port;
+          if (!xayax::MySqlBlockStorage::ParseUrl (
+                  FLAGS_blockcache_mysql, host, port, user, password, db, tbl))
+            throw std::runtime_error ("--blockcache_mysql is invalid");
+          cacheStore = std::make_unique<xayax::MySqlBlockStorage> (
+              host, port, user, password, db, tbl);
+          LOG (INFO) << "Using MySQL server at " << host << " as block cache";
+        }
+      std::unique_ptr<xayax::BlockCacheChain> cache;
+      if (cacheStore != nullptr)
+        cache = std::make_unique<xayax::BlockCacheChain> (
+                    base, *cacheStore, FLAGS_max_reorg_depth);
+
+      xayax::BaseChain* baseOrCache = &base;
+      if (cache != nullptr)
+        baseOrCache = cache.get ();
+
+      xayax::Controller controller(*baseOrCache, FLAGS_datadir);
       controller.SetMaxReorgDepth (FLAGS_max_reorg_depth);
       controller.SetZmqEndpoint (FLAGS_zmq_address);
       controller.SetRpcBinding (FLAGS_port, FLAGS_listen_locally);

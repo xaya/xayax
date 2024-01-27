@@ -24,6 +24,7 @@ test-driver
 Makefile
 Makefile.in
 __pycache__
+.dirstamp
 
 *.lo
 *.la

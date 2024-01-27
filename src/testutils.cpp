@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -181,6 +181,13 @@ TestBaseChain::SetShouldThrow (const bool v)
   shouldThrow = v;
 }
 
+unsigned
+TestBaseChain::GetBlockRangeCalls () const
+{
+  std::lock_guard<std::mutex> lock(mut);
+  return getBlockRangeCalls;
+}
+
 void
 TestBaseChain::Start ()
 {
@@ -235,6 +242,8 @@ TestBaseChain::GetBlockRange (const uint64_t start, const uint64_t count)
   MaybeThrow ();
   std::lock_guard<std::mutex> lock(mut);
   std::vector<BlockData> res;
+
+  ++getBlockRangeCalls;
 
   for (uint64_t h = start; h < start + count; ++h)
     {

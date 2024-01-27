@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2023 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -44,7 +44,7 @@ class TestBaseChain : public BaseChain
 private:
 
   /** Mutex for protecting the member fields.  */
-  std::mutex mut;
+  mutable std::mutex mut;
 
   /** Chain state with in-memory database for the tree structure.  */
   Chainstate chain;
@@ -82,6 +82,9 @@ private:
 
   /** If set to true, then implementation methods throw.  */
   bool shouldThrow = false;
+
+  /** How many times GetBlockRange has been called.  */
+  unsigned getBlockRangeCalls = 0;
 
   /**
    * Constructs a new block hash based on our counter.
@@ -150,6 +153,12 @@ public:
    * Turns errors to be thrown by implementation methods on or off.
    */
   void SetShouldThrow (bool v);
+
+  /**
+   * Returns how many times GetBlockRange has been called.  This is used
+   * to check that no unexpected calls happen when we use cached blocks.
+   */
+  unsigned GetBlockRangeCalls () const;
 
   void Start () override;
   bool EnablePending () override;
