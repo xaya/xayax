@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 The Xaya developers
+// Copyright (C) 2021-2024 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,6 +37,22 @@ DEFINE_int32 (eth_rpc_timeout_ms, 10'000,
               "timeout for RPC calls to the EVM node");
 DEFINE_string (eth_rpc_headers, "",
                "extra headers to send with EVM JSON-RPC requests");
+
+namespace
+{
+
+/**
+ * Defines writing of pairs of integers, so we can log them.
+ */
+template <typename A, typename B>
+  std::ostream&
+  operator<< (std::ostream& out, const std::pair<A, B>& p)
+{
+  out << "(" << p.first << ", " << p.second << ")";
+  return out;
+}
+
+} // anonymous namespace
 
 /* ************************************************************************** */
 
@@ -418,7 +434,10 @@ public:
     const int64_t logIndex
         = AbiDecoder::ParseInt (log["logIndex"].asString ());
     const auto curIndices = std::make_pair (txIndex, logIndex);
-    CHECK (curIndices > lastIndices) << "Logs misordered in result";
+    CHECK (curIndices > lastIndices)
+        << "Logs misordered in result for block 0x" << blk.hash << ":\n"
+        << "  last: " << lastIndices << "\n"
+        << "  current: " << curIndices;
 
     lastIndices = curIndices;
     blk.moves.push_back (ExtractMove (log));
