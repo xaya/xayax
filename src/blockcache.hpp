@@ -147,31 +147,23 @@ private:
 public:
 
   /**
-   * Opens a connection to the given MySQL server and uses it to cache
-   * the blocks.  Note that the right schema (see cache/mysql.cpp) must
-   * be set up already and the table exist.
+   * Constructs an instance, without connecting a server as of yet.
+   * Before it can be used, Connect must be called.
    */
-  MySqlBlockStorage (const std::string& host, unsigned port,
-                     const std::string& user, const std::string& password,
-                     const std::string& db, const std::string& tbl);
+  MySqlBlockStorage ();
 
   ~MySqlBlockStorage ();
 
+  /**
+   * Connects to the server.  Returns false if the URL is invalid.
+   * Format for the URL is:
+   *
+   *  mysql:://user:password@host:port/database/table[?options]
+   */
+  bool Connect (const std::string& url);
+
   void Store (const std::vector<BlockData>& blocks) override;
   std::vector<BlockData> GetRange (uint64_t start, uint64_t count) override;
-
-  /**
-   * Helper function that parses a URL string into the components needed
-   * to construct a MySqlBlockStorage instance.  The string has the
-   * following form:
-   *    mysql://user:password@host:port/database/table
-   *
-   * Returns true if successful, false if the format is invalid.
-   */
-  static bool ParseUrl (const std::string& url,
-                        std::string& host, unsigned& port,
-                        std::string& user, std::string& password,
-                        std::string& db, std::string& tbl);
 
 };
 

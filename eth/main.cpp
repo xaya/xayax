@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 The Xaya developers
+// Copyright (C) 2021-2024 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -114,14 +114,12 @@ main (int argc, char* argv[])
         {
           if (cacheStore != nullptr)
             throw std::runtime_error ("only one block cache can be chosen");
-          std::string host, user, password, db, tbl;
-          unsigned port;
-          if (!xayax::MySqlBlockStorage::ParseUrl (
-                  FLAGS_blockcache_mysql, host, port, user, password, db, tbl))
+          auto mysqlStore = std::make_unique<xayax::MySqlBlockStorage> ();
+          if (!mysqlStore->Connect (FLAGS_blockcache_mysql))
             throw std::runtime_error ("--blockcache_mysql is invalid");
-          cacheStore = std::make_unique<xayax::MySqlBlockStorage> (
-              host, port, user, password, db, tbl);
-          LOG (INFO) << "Using MySQL server at " << host << " as block cache";
+
+          cacheStore = std::move (mysqlStore);
+          LOG (INFO) << "Using MySQL block cache";
         }
       std::unique_ptr<xayax::BlockCacheChain> cache;
       if (cacheStore != nullptr)

@@ -41,6 +41,12 @@ public:
   Implementation () = default;
 
   /**
+   * Enables a client certificate.
+   */
+  void UseCert (const std::string& ca, const std::string& cert,
+                const std::string& key);
+
+  /**
    * Opens the connection to the MySQL server.  Returns false if the connection
    * fails.
    */
@@ -59,6 +65,14 @@ public:
   std::vector<BlockData> GetRange (uint64_t start, uint64_t count);
 
 };
+
+void
+MySqlBlockStorage::Implementation::UseCert (const std::string& ca,
+                                            const std::string& cert,
+                                            const std::string& key)
+{
+  connection.UseClientCertificate (ca, cert, key);
+}
 
 bool
 MySqlBlockStorage::Implementation::Connect (
@@ -160,17 +174,48 @@ MySqlBlockStorage::Implementation::GetRange (const uint64_t start,
 
 /* ************************************************************************** */
 
-MySqlBlockStorage::MySqlBlockStorage (
-    const std::string& host, const unsigned port,
-    const std::string& user, const std::string& password,
-    const std::string& db, const std::string& tbl)
-{
-  impl = std::make_unique<Implementation> ();
-  CHECK (impl->Connect (host, port, user, password, db, tbl))
-      << "Failed to make MySQL connection";
-}
-
+MySqlBlockStorage::MySqlBlockStorage () = default;
 MySqlBlockStorage::~MySqlBlockStorage () = default;
+
+bool
+MySqlBlockStorage::Connect (const std::string& url)
+{
+  CHECK (impl == nullptr) << "MySqlBlockStorage is already connected";
+
+  mypp::UrlParser parser;
+  try
+    {
+      parser.Parse (url);
+    }
+  catch (const mypp::Error& exc)
+    {
+      LOG (ERROR) << exc.what ();
+      return false;
+    }
+
+  if (!parser.HasTable ())
+    {
+      LOG (ERROR) << "Provided URL has no table specified";
+      return false;
+    }
+
+  impl = std::make_unique<Implementation> ();
+
+  if (parser.HasOption ("ssl-cert"))
+    {
+      LOG (INFO) << "Using client certificate for MySQL connection";
+      impl->UseCert (parser.GetOption ("ssl-ca"),
+                     parser.GetOption ("ssl-cert"),
+                     parser.GetOption ("ssl-key"));
+    }
+
+  CHECK (impl->Connect (parser.GetHost (), parser.GetPort (),
+                        parser.GetUser (), parser.GetPassword (),
+                        parser.GetDatabase (), parser.GetTable ()))
+      << "Failed to make MySQL connection";
+
+  return true;
+}
 
 void
 MySqlBlockStorage::Store (const std::vector<BlockData>& blocks)
@@ -182,26 +227,6 @@ std::vector<BlockData>
 MySqlBlockStorage::GetRange (const uint64_t start, const uint64_t count)
 {
   return impl->GetRange (start, count);
-}
-
-bool
-MySqlBlockStorage::ParseUrl (const std::string& url,  
-                             std::string& host, unsigned& port,
-                             std::string& user, std::string& password,
-                             std::string& db, std::string& tbl)
-{
-  try
-    {
-      mypp::ParseUrl (url, host, port, user, password, db, tbl);
-      if (tbl.empty ())
-        return false;
-      return true;
-    }
-  catch (const mypp::Error& exc)
-    {
-      LOG (ERROR) << exc.what ();
-      return false;
-    }
 }
 
 /* ************************************************************************** */

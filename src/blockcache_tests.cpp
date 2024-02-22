@@ -214,32 +214,11 @@ protected:
       );
     )");
 
-    std::string host, user, password, db, tbl;
-    unsigned port;
-    CHECK (MySqlBlockStorage::ParseUrl (
-        GetTempDbUrl () + "/cached_blocks",
-        host, port, user, password, db, tbl));
-    store = std::make_unique<MySqlBlockStorage> (host, port, user, password,
-                                                 db, tbl);
+    store = std::make_unique<MySqlBlockStorage> ();
+    CHECK (store->Connect (GetTempDbUrl () + "/cached_blocks"));
   }
 
 };
-
-TEST_F (MySqlBlockStorageTests, Parsing)
-{
-  std::string host, user, password, db, tbl;
-  unsigned port;
-
-  ASSERT_TRUE (MySqlBlockStorage::ParseUrl (
-      "mysql://domob:foo:bar@example.com:123/database/table",
-      host, port, user, password, db, tbl));
-  EXPECT_EQ (host, "example.com");
-  EXPECT_EQ (port, 123);
-  EXPECT_EQ (user, "domob");
-  EXPECT_EQ (password, "foo:bar");
-  EXPECT_EQ (db, "database");
-  EXPECT_EQ (tbl, "table");
-}
 
 TEST_F (MySqlBlockStorageTests, Storage)
 {
