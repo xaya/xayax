@@ -29,3 +29,5 @@ __pycache__
 *.lo
 *.la
 *.trs
+*.o
+*.log
