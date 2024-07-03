@@ -22,7 +22,7 @@ RUN apk add --no-cache \
   pkgconfig \
   py3-pip \
   python3-dev
-RUN pip3 install web3
+RUN pip3 install --break-system-packages web3
 RUN npm install -g truffle
 
 # Build and install libunivalue.
@@ -38,23 +38,6 @@ WORKDIR /usr/src/websocketpp
 RUN git clone -b ${WEBSOCKETPP_VERSION} \
   https://github.com/zaphoyd/websocketpp .
 RUN cmake . && make && make install/strip
-
-# Build and install libsecp256k1.
-ARG SECP256K1_VERSION="master"
-WORKDIR /usr/src/libsecp256k1
-RUN git clone -b ${SECP256K1_VERSION} \
-  https://github.com/bitcoin-core/secp256k1 .
-RUN ./autogen.sh \
-    && ./configure --disable-tests --disable-benchmark  \
-                   --enable-module-recovery \
-    && make && make install-strip
-
-# Build and install eth-utils.
-ARG ETHUTILS_VERSION="master"
-WORKDIR /usr/src/ethutils
-RUN git clone -b ${ETHUTILS_VERSION} \
-  https://github.com/xaya/eth-utils .
-RUN ./autogen.sh && ./configure && make && make install-strip
 
 # Build and install mypp.
 ARG MYPP_VERSION="master"
