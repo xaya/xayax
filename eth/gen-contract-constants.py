@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2021 The Xaya developers
+# Copyright (C) 2021-2024 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,6 +19,17 @@ import os.path
 
 print ("#include \"contract-constants.hpp\"")
 print ("namespace xayax {")
+
+def hexWithPrefix (data):
+  """
+  Converts something to hex() and ensures it has 0x prefix.
+  """
+
+  res = data.hex ()
+  if res[:2] != "0x":
+    res = "0x" + res
+
+  return res
 
 def genSignature (abi, typ, name):
   """
@@ -42,14 +53,14 @@ with open (os.path.join ("solidity", "node_modules", "@xaya",
   accAbi = json.load (f)["abi"]
   sgn = genSignature (accAbi, "event", "Move")
   print ("const std::string MOVE_EVENT = \""
-            + Web3.keccak (sgn.encode ("ascii")).hex ()
+            + hexWithPrefix (Web3.keccak (sgn.encode ("ascii")))
             + "\";")
 
 # Store the function selectors of select calls we need.
 def outputFcnSelector (abi, name, var):
   sgn = genSignature (abi, "function", name)
   print (f"const std::string {var} = \""
-            + Web3.keccak (sgn.encode ("ascii")).hex ()[:10]
+            + hexWithPrefix (Web3.keccak (sgn.encode ("ascii"))[:4])
             + "\";")
 outputFcnSelector (accAbi, "wchiToken", "ACCOUNT_WCHI_FCN")
 with open (os.path.join ("solidity", "build", "contracts",

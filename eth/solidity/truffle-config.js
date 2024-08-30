@@ -7,7 +7,8 @@ module.exports = {
           enabled: true,
           runs: 100
         }
-      }
+      },
+      evmVersion: "london"
     }
   },
   plugins: ["solidity-coverage"]
