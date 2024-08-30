@@ -74,7 +74,11 @@ FROM alpine
 COPY --from=build /jail /usr/local/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 LABEL description="Xaya X connector binaries"
-VOLUME ["/log", "/xayax"]
+# The image uses /log to store logs and /xayax to store the local state.
+# These are not explicitly declared as VOLUME, though, since it is always
+# possible to mount in a volume anyway, and without that, it is also possible
+# to not use an explicit volume (e.g. for temporary testing containers).
+RUN mkdir -p /log /xayax
 ENV LD_LIBRARY_PATH "/usr/local/lib64"
 ENV GLOG_log_dir "/log"
 ENV HOST ""
