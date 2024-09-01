@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 The Xaya developers
+// Copyright (C) 2021-2024 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -728,6 +728,37 @@ TEST_F (ControllerSendUpdatesTests, UpdatesFromPrunedBlocks)
     "detach": 0
   })"));
   ExpectZmq ({}, branch, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, UnknownFromBlock)
+{
+  const auto branch = base.AttachBranch (genesis.hash, 5);
+  WaitForZmqTip (branch.back ());
+
+  const std::string invalidBlock("some unknown block");
+  const auto upd = rpc.game_sendupdates2 (invalidBlock, GAME_ID);
+  EXPECT_EQ (upd["toblock"], invalidBlock);
+  EXPECT_TRUE (upd["error"].asBool ());
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, {}, upd["reqtoken"].asString ());
+}
+
+TEST_F (ControllerSendUpdatesTests, FutureFromBlock)
+{
+  DisableSync ();
+  const auto branch = base.AttachBranch (genesis.hash, 5);
+
+  const auto upd = rpc.game_sendupdates2 (branch.back ().hash, GAME_ID);
+  EXPECT_EQ (upd["toblock"], branch.back ().hash);
+  EXPECT_TRUE (upd["error"].asBool ());
+  EXPECT_EQ (upd["steps"], ParseJson (R"({
+    "attach": 0,
+    "detach": 0
+  })"));
+  ExpectZmq ({}, {}, upd["reqtoken"].asString ());
 }
 
 TEST_F (ControllerSendUpdatesTests, ExplicitToBlock)

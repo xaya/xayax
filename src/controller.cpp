@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2023 The Xaya developers
+// Copyright (C) 2021-2024 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -88,9 +88,12 @@ private:
    * was not filled in and is instead retrieved, then those blocks will be
    * returned in queriedAttach.
    *
+   * If there is an error, such as an unknown "from" block requested, then
+   * the method returns false.
+   *
    * This method may throw in case of a base-chain error.
    */
-  void PushZmqBlocks (const std::string& from,
+  bool PushZmqBlocks (const std::string& from,
                       const std::string& to,
                       const std::vector<BlockData>& attaches, unsigned num,
                       const std::string& reqtoken,
@@ -413,11 +416,13 @@ Controller::RpcServer::game_sendupdates3 (const std::string& from,
   }
 
   std::vector<BlockData> detaches, attaches;
+  bool ok;
   try
     {
       std::lock_guard<std::mutex> lock(run.mutChain);
-      run.PushZmqBlocks (from, to, {}, FLAGS_xayax_block_range, reqtoken.str (),
-                         detaches, attaches);
+      ok = run.PushZmqBlocks (
+              from, to, {}, FLAGS_xayax_block_range, reqtoken.str (),
+              detaches, attaches);
     }
   catch (const std::exception& exc)
     {
@@ -440,6 +445,7 @@ Controller::RpcServer::game_sendupdates3 (const std::string& from,
   res["reqtoken"] = reqtoken.str ();
   res["toblock"] = toBlock;
   res["steps"] = steps;
+  res["error"] = !ok;
 
   return res;
 }
@@ -611,7 +617,7 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
     chain.Prune (tipHeight - parent.maxReorgDepth - 1);
 }
 
-void
+bool
 Controller::RunData::PushZmqBlocks (const std::string& from,
                                     const std::string& to,
                                     const std::vector<BlockData>& attaches,
@@ -634,8 +640,11 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
           << "Requested ZMQ blocks without explicit from and no attaches";
       for (const auto& blk : attaches)
         zmq.SendBlockAttach (blk, reqtoken);
-      return;
+      return true;
     }
+
+  const int64_t pruningDepth = chain.GetLowestUnprunedHeight ();
+  CHECK_GE (pruningDepth, 0);
 
   detach.clear ();
   int64_t mainchainHeight = -1;
@@ -654,7 +663,21 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
           LOG (ERROR)
               << "Requested 'from' block " << from
               << " is unknown and also not on the main chain";
-          return;
+          return false;
+        }
+
+      /* If Xaya X is not in sync, it may happen that the from block
+         requested is retrieved from the base chain, but not actually
+         one we pruned, but a future one (or one in parallel to the blocks
+         we currently store).  In this case, we can't do anything until
+         the sync catches up, but we need to notice this situation and
+         actually exit now.  */
+      if (mainchainHeight >= pruningDepth)
+        {
+          LOG (ERROR)
+              << "Requested 'from' block " << from
+              << " is beyond the current sync state of Xaya X";
+          return false;
         }
     }
   for (const auto& blk : detach)
@@ -700,7 +723,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
         {
           LOG (WARNING)
               << "Requested 'to' block " << to << " is not on the main chain";
-          return;
+          return false;
         }
 
       if (toHeight == static_cast<int64_t> (forkHeight))
@@ -709,7 +732,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
               << "Mismatch between blocks " << to << " and " << forkPoint
               << " at fork height " << forkHeight
               << ", race condition?";
-          return;
+          return false;
         }
 
       if (toHeight < static_cast<int64_t> (forkHeight))
@@ -725,14 +748,14 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
               LOG (WARNING)
                   << "Mismatch for detach blocks towards 'to' with forkpoint "
                   << forkPoint << ", race condition?";
-              return;
+              return false;
             }
           for (auto it = toDetach.rbegin (); it != toDetach.rend (); ++it)
             {
               detach.push_back (*it);
               zmq.SendBlockDetach (*it, reqtoken);
             }
-          return;
+          return true;
         }
 
       /* Otherwise, we do attaches as usual, but only to the toHeight at most.
@@ -751,7 +774,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
          the last attached block will be the new tip, and the parent
          of the last detached one.  */
       if (!detach.empty () && attaches.back ().hash == detach.back ().parent)
-        return;
+        return true;
 
       bool foundForkPoint = false;
       for (const auto& blk : attaches)
@@ -765,7 +788,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
             zmq.SendBlockAttach (blk, reqtoken);
         }
       CHECK (foundForkPoint);
-      return;
+      return true;
     }
 
   /* Otherwise, this is the situation of an explicit RPC request for
@@ -780,7 +803,7 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
   num = std::min<unsigned> (num, targetHeight - forkHeight);
   queriedAttach = parent.base.GetBlockRange (forkHeight + 1, num);
   if (queriedAttach.empty ())
-    return;
+    return true;
 
   /* It may happen that the chain returned does not actually match up with the
      detaches; in which case we will simply not send any attaches for now.
@@ -798,15 +821,13 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
       LOG (WARNING)
           << "Mismatch for detached and attached blocks, race condition?";
       queriedAttach.clear ();
-      return;
+      return false;
     }
 
   /* We need to make sure that we are not sending any attaches
      for blocks that are not in our local chain state, so GSPs cannot get
      stuck on them in any case.  If they are before our pruning depth,
      then it should be fine.  */
-  const int64_t pruningDepth = chain.GetLowestUnprunedHeight ();
-  CHECK_GE (pruningDepth, 0);
   if (queriedAttach.back ().height >= static_cast<uint64_t> (pruningDepth))
     {
       uint64_t height;
@@ -815,13 +836,15 @@ Controller::RunData::PushZmqBlocks (const std::string& from,
           LOG (WARNING)
               << "Attach blocks are not known to the local chain state yet";
           queriedAttach.clear ();
-          return;
+          return false;
         }
       CHECK_EQ (height, queriedAttach.back ().height);
     }
 
   for (const auto& blk : queriedAttach)
     zmq.SendBlockAttach (blk, reqtoken);
+
+  return true;
 }
 
 /* ************************************************************************** */
