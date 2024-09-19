@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2024 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -243,17 +243,45 @@ ZmqPub::~ZmqPub ()
 void
 ZmqPub::TrackGame (const std::string& g)
 {
-  LOG (INFO) << "Tracking game: " << g;
   std::lock_guard<std::mutex> lock(mut);
-  games.insert (g);
+
+  uint64_t newDepth;
+  auto mit = games.find (g);
+  if (mit == games.end ())
+    {
+      games.emplace (g, 1);
+      newDepth = 1;
+    }
+  else
+    {
+      newDepth = mit->second + 1;
+      mit->second = newDepth;
+    }
+
+  LOG (INFO) << "Tracking game '" << g << "', new depth: " << newDepth;
 }
 
 void
 ZmqPub::UntrackGame (const std::string& g)
 {
-  LOG (INFO) << "Untracking game: " << g;
   std::lock_guard<std::mutex> lock(mut);
-  games.erase (g);
+
+  uint64_t newDepth;
+  auto mit = games.find (g);
+  if (mit == games.end ())
+    newDepth = 0;
+  else
+    {
+      CHECK_GT (mit->second, 0);
+      newDepth = mit->second - 1;
+
+      if (newDepth == 0)
+        games.erase (mit);
+      else
+        mit->second = newDepth;
+    }
+
+  LOG (INFO) << "Untracking game '" << g << "', new depth: " << newDepth;
 }
 
 void
@@ -320,10 +348,11 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
      that we track.  */
   std::map<std::string, Json::Value> perGameMoves;
   std::map<std::string, Json::Value> perGameAdmin;
-  for (const auto& g : games)
+  for (const auto& entry : games)
     {
-      perGameMoves.emplace (g, Json::Value (Json::arrayValue));
-      perGameAdmin.emplace (g, Json::Value (Json::arrayValue));
+      CHECK_GT (entry.second, 0);
+      perGameMoves.emplace (entry.first, Json::Value (Json::arrayValue));
+      perGameAdmin.emplace (entry.first, Json::Value (Json::arrayValue));
     }
 
   /* Process all moves in the block and add relevant data to the per-game
@@ -358,13 +387,15 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
     }
 
   /* Send out notifications for all tracked games.  */
-  for (const auto& g : games)
+  for (const auto& entry : games)
     {
-      const auto mitMv = perGameMoves.find (g);
+      CHECK_GT (entry.second, 0);
+
+      const auto mitMv = perGameMoves.find (entry.first);
       CHECK (mitMv != perGameMoves.end ());
       CHECK (mitMv->second.isArray ());
 
-      const auto mitCmd = perGameAdmin.find (g);
+      const auto mitCmd = perGameAdmin.find (entry.first);
       CHECK (mitCmd != perGameAdmin.end ());
       CHECK (mitCmd->second.isArray ());
 
@@ -372,7 +403,7 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
       thisGame["moves"] = mitMv->second;
       thisGame["admin"] = mitCmd->second;
 
-      SendMessage (cmdPrefix + " json " + g, thisGame);
+      SendMessage (cmdPrefix + " json " + entry.first, thisGame);
     }
 }
 
@@ -399,8 +430,11 @@ ZmqPub::SendPendingMoves (const std::vector<MoveData>& moves)
 
   /* We start with an empty array of moves for each game that we track.  */
   std::map<std::string, Json::Value> movesPerGame;
-  for (const auto& g : games)
-    movesPerGame.emplace (g, Json::Value (Json::arrayValue));
+  for (const auto& entry : games)
+    {
+      CHECK_GT (entry.second, 0);
+      movesPerGame.emplace (entry.first, Json::Value (Json::arrayValue));
+    }
 
   /* Process all the MoveData instances, adding to the list of moves
      per game.  */

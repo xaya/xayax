@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2024 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -417,12 +417,18 @@ TEST_F (ZmqPubTests, TrackedGames)
   /* No games are tracked so far.  */
 
   pub.TrackGame ("foo");
+  /* Verify in-depth tracking by simulating a second GSP joining and
+     leaving again.  This should leave foo still tracked.  */
+  pub.TrackGame ("foo");
+  pub.UntrackGame ("foo");
   pub.SendBlockAttach (blk, "");
 
   pub.TrackGame ("bar");
   blk.moves = {mv, cmdFoo, cmdBar};
   pub.SendBlockAttach (blk, "");
 
+  pub.UntrackGame ("foo");
+  /* An extra untrack is harmless (and does not do anything).  */
   pub.UntrackGame ("foo");
   blk.moves = {cmdFoo, cmdBar};
   pub.SendBlockAttach (blk, "");

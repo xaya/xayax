@@ -13,7 +13,6 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace xayax
 {
@@ -39,8 +38,14 @@ private:
   /** Next sequence number per command string.  */
   std::unordered_map<std::string, uint32_t> nextSeq;
 
-  /** Set of tracked game IDs.  */
-  std::unordered_set<std::string> games;
+  /**
+   * The games that are currently tracked.  For each game, we store a current
+   * "depth" -- how many times it has been tracked; each untracking decrements
+   * the depth, and we stop actually tracking the game when the counter
+   * reaches zero.  This ensures that the logic will still work properly
+   * if multiple GSPs for the game game share a single Xaya X instance.
+   */
+  std::unordered_map<std::string, uint64_t> games;
 
   /**
    * Sends a multipart message consisting of command, JSON data and the right
@@ -70,12 +75,12 @@ public:
   ~ZmqPub ();
 
   /**
-   * Adds a game to the list of tracked games.
+   * Adds a game to the list of tracked games (incrementing its depth).
    */
   void TrackGame (const std::string& g);
 
   /**
-   * Removes a game from the list of tracked games.
+   * Removes a game from the list of tracked games (decrementing its depth).
    */
   void UntrackGame (const std::string& g);
 
