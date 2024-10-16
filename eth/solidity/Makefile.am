@@ -1,8 +1,8 @@
 all-local:
-	truffle compile
+	forge build
 
 check-local:
-	truffle test
+	forge test
 
 clean-local:
-	rm -rf build
+	rm -rf cache out

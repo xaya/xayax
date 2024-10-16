@@ -1,0 +1,15 @@
+[submodule "eth/solidity/lib/polygon-contract"]
+	path = eth/solidity/lib/polygon-contract
+	url = https://github.com/xaya/polygon-contract
+[submodule "eth/solidity/lib/openzeppelin-contracts"]
+	path = eth/solidity/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "eth/solidity/lib/base64"]
+	path = eth/solidity/lib/base64
+	url = https://github.com/Brechtpd/base64
+[submodule "eth/solidity/lib/wchi"]
+	path = eth/solidity/lib/wchi
+	url = https://github.com/xaya/wchi
+[submodule "eth/solidity/lib/forge-std"]
+	path = eth/solidity/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

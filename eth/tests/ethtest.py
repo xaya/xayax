@@ -64,10 +64,10 @@ class Fixture (testcase.BaseChainFixture):
     """
 
     scriptPath = os.path.dirname (os.path.abspath (__file__))
-    contracts = os.path.join (scriptPath, "..",
-                              "solidity", "build", "contracts")
+    outdir = os.path.join (scriptPath, "..", "solidity", "out")
 
-    with open (os.path.join (contracts, "MultiMover.json")) as f:
+    with open (os.path.join (outdir, "MultiMover.sol", "MultiMover.json"),
+               "rt") as f:
       data = json.load (f)
 
     if env is None:

@@ -1,0 +1,4 @@
+base64-sol/=lib/base64/
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+@xaya/eth-account-registry/contracts/=lib/polygon-contract/contracts/
+@xaya/wchi/contracts/=lib/wchi/contracts/

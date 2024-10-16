@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 The Xaya developers
+# Copyright (C) 2021-2024 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -298,9 +298,10 @@ class Ganache:
 
     code = None
     if "bytecode" in data:
-      code = data["bytecode"]
-    elif "bin" in data:
-      code = data["bin"]
+      if type (data["bytecode"]) == str:
+        code = data["bytecode"]
+      elif type (data["bytecode"]) == dict and "object" in data["bytecode"]:
+        code = data["bytecode"]["object"]
     assert code is not None, "contract has no bytecode"
 
     c = self.w3.eth.contract (abi=data["abi"], bytecode=code)

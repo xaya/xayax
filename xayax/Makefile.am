@@ -13,8 +13,6 @@ xayax_PYTHON = __init__.py \
   testcase.py
 xayax_DATA = $(CONTRACTS)
 
-xayamod = $(top_srcdir)/node_modules/@xaya
-$(WCHI_CONTRACTS): %: $(xayamod)/wchi/build/contracts/%
-	cp $< $@
-$(ACCOUNTS_CONTRACTS): %: $(xayamod)/eth-account-registry/build/contracts/%
-	cp $< $@
+forgeout = $(top_builddir)/eth/solidity/out
+$(CONTRACTS): %.json: $(forgeout)/%.sol
+	cp $</*.json $@
