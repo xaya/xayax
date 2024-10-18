@@ -168,10 +168,9 @@ class Instance:
       self.stop ()
 
 
-class Ganache:
+class EvmNode:
   """
-  A process running a local Ethereum-like blockchain using ganache-cli
-  for testing.
+  A process running a local Ethereum-like blockchain for testing.
   """
 
   def __init__ (self, basedir, rpcPort):
@@ -180,16 +179,11 @@ class Ganache:
     """
 
     self.log = logging.getLogger ("xayax.eth")
-    self.datadir = os.path.join (basedir, "ganache-cli")
+    self.basedir = basedir
 
     self.port = rpcPort
     self.rpcurl = "http://localhost:%d" % self.port
     self.wsurl = "ws://localhost:%d" % self.port
-
-    self.log.info ("Creating fresh data directory for Ganache-CLI in %s"
-                    % self.datadir)
-    shutil.rmtree (self.datadir, ignore_errors=True)
-    os.mkdir (self.datadir)
 
     self.proc = None
 
@@ -199,30 +193,25 @@ class Ganache:
     """
 
     if self.proc is not None:
-      self.log.error ("Ganache process is already running, not starting again")
+      self.log.error ("EVM node process is already running, not starting again")
       return
 
-    self.log.info ("Starting new Ganache-CLI process")
-    args = ["/usr/bin/env", "ganache"]
+    self.log.info ("Starting new EVM node process")
+    args = ["/usr/bin/env", "anvil"]
     args.extend (["-p", str (self.port)])
-    args.extend (["--db", self.datadir])
-    # By default, Ganache mines a new block on each transaction sent.
-    # This is not what we want for testing in a Xaya-like environment; thus
-    # we set a very long block interval, which will be so long that no blocks
-    # get actually mined automatically.  Tests can mine on demand instead.
-    args.extend (["-b", str (1_000_000)])
+    # By default, Anvil mines a new block on each transaction sent.
+    # This is not what we want for testing in a Xaya-like environment;
+    # tests will mine on demand instead.
+    args.append ("--no-mining")
     # Use a timestamp "early" into Xaya history.  This ensures that the
     # genesis block will be before anything programmed into a particular
     # game, as would be the case with a real network.
-    args.extend (["-t", "2018-01-01Z00:00:00"])
-    # We want eth_call to throw in case of a tx revert (this is also what
-    # e.g. geth does).
-    args.append ("--chain.vmErrorsOnRPCResponse")
-    self.logFile = open (os.path.join (self.datadir, "ganache.log"), "wt")
+    args.extend (["--timestamp", "1514764800"])
+    self.logFile = open (os.path.join (self.basedir, "anvil.log"), "wt")
     self.proc = subprocess.Popen (args, stderr=subprocess.STDOUT,
                                   stdout=self.logFile)
 
-    # The Ganache wrapper has an optional mock time, which can be set
+    # The EVM node wrapper has an optional mock time, which can be set
     # from the outside and which (if set) is used as argument to evm_mine
     # to determine the next block's timestamp.
     self.mockTime = None
@@ -232,7 +221,7 @@ class Ganache:
     while True:
       try:
         chainId = int (self.rpc.eth_chainId (), 16)
-        self.log.info ("Ganache is up, chain = %d" % chainId)
+        self.log.info ("EVM node is up, chain = %d" % chainId)
         break
       except:
         time.sleep (0.1)
@@ -241,7 +230,7 @@ class Ganache:
 
   def stop (self):
     if self.proc is None:
-      self.log.error ("No Ganache process is running, cannot stop it")
+      self.log.error ("No EVM node process is running, cannot stop it")
       return
 
     if self.logFile is not None:
@@ -250,7 +239,7 @@ class Ganache:
 
     self.w3 = None
 
-    self.log.info ("Stopping Ganache process")
+    self.log.info ("Stopping EVM node process")
     self.proc.terminate ()
 
     self.log.info ("Waiting for process to stop...")
@@ -263,7 +252,12 @@ class Ganache:
     be used if multiple threads need to send RPCs in parallel.
     """
 
-    return jsonrpclib.ServerProxy (self.rpcurl)
+    # Anvil does not accept the default application/json-rpc content type
+    # sent by jsonrpclib, and wants application/json as content type.
+    config = jsonrpclib.config.DEFAULT
+    config.content_type = "application/json"
+
+    return jsonrpclib.ServerProxy (self.rpcurl, config=config)
 
   @contextmanager
   def run (self, *args, **kwargs):
@@ -287,6 +281,9 @@ class Ganache:
       self.rpc.evm_mine ()
     else:
       self.rpc.evm_mine (self.mockTime)
+      # We need to bump the mock time at least by one second
+      # so the next block can be mined, too.
+      self.mockTime += 1
 
   def deployContract (self, addr, data, *args, **kwargs):
     """
@@ -352,11 +349,11 @@ class Ganache:
 
 class ChainSnapshot:
   """
-  A snapshot of the Ganache test blockchain.  It can be created from the
+  A snapshot of the EVM test blockchain.  It can be created from the
   current state, and then we can always revert back to it at later points
   in time as desired.
 
-  This is a wrapper around Ganache's evm_snapshot and evm_revert RPC methods,
+  This is a wrapper around the debug evm_snapshot and evm_revert RPC methods,
   which takes care of the underlying snapshot ID and also allows us to
   revert back to a snapshot multiple times.
 
@@ -374,7 +371,7 @@ class ChainSnapshot:
 
   def restore (self):
     self.rpc.evm_revert (self.id)
-    # Ganache allows a snapshot to be used only once.  Thus take a new one
+    # The node allows a snapshot to be used only once.  Thus take a new one
     # now (at the same state) so we can revert again in the future.
     self.takeSnapshot ()
 
@@ -382,12 +379,11 @@ class ChainSnapshot:
 class Environment:
   """
   A full test environment consisting of a local Ethereum chain
-  (using ganache-cli) with the Xaya contracts deployed, and a Xaya X
-  process connected to it.
+  with the Xaya contracts deployed, and a Xaya X process connected to it.
 
   When running, it exposes the RPC interface of the Xaya X process, which
   should be connected to the GSP, and also the RPC interface of the
-  ganache-cli process (through JSON-RPC as well as Web3.py) for controlling
+  EVM node process (through JSON-RPC as well as Web3.py) for controlling
   of the environment in a test.
   """
 
@@ -395,7 +391,7 @@ class Environment:
     zmqPorts = {
       "hashblock": next (portgen),
     }
-    self.ganache = Ganache (basedir, next (portgen))
+    self.evm = EvmNode (basedir, next (portgen))
     self.xnode = Instance (basedir, portgen, xayaxBinary)
     self.log = logging.getLogger ("xayax.eth")
     self.watchForPending = []
@@ -441,29 +437,29 @@ class Environment:
     as a context manager.
     """
 
-    with self.ganache.run ():
+    with self.evm.run ():
       self.signerAccounts = {}
-      self.contracts = self.ganache.deployXaya ()
+      self.contracts = self.evm.deployXaya ()
       self.log.info ("WCHI contract: %s" % self.contracts.wchi.address)
       self.log.info ("Accounts contract: %s" % self.contracts.registry.address)
-      self.ganache.w3.eth.default_account = self.contracts.account
+      self.evm.w3.eth.default_account = self.contracts.account
       self.clearRegisteredCache ()
       if self.defaultPending:
         self.addWatchedContract (self.contracts.registry.address)
       for cb in self.deploymentCbs:
         cb (self)
-      with self.xnode.run (self.contracts.registry.address, self.ganache.rpcurl,
-                           ws=self.ganache.wsurl,
+      with self.xnode.run (self.contracts.registry.address, self.evm.rpcurl,
+                           ws=self.evm.wsurl,
                            watchForPending=self.watchForPending):
         yield self
 
-  def createGanacheRpc (self):
+  def createEvmRpc (self):
     """
-    Returns a fresh RPC handle for talking directly to the Ganache-CLI
-    node, e.g. for sending moves, mining or triggering reorgs.
+    Returns a fresh RPC handle for talking directly to the EVM node,
+    e.g. for sending moves, mining or triggering reorgs.
     """
 
-    return self.ganache.createRpc ()
+    return self.evm.createRpc ()
 
   def getXRpcUrl (self):
     """
@@ -482,7 +478,7 @@ class Environment:
     at a later time (e.g. for testing reorgs).
     """
 
-    return ChainSnapshot (self.createGanacheRpc ())
+    return ChainSnapshot (self.createEvmRpc ())
 
   def setMockTime (self, timestamp):
     """
@@ -490,8 +486,8 @@ class Environment:
     in the future will use.
     """
 
-    self.log.info ("Setting mocktime for Ganache to %d" % timestamp)
-    self.ganache.mockTime = timestamp
+    self.log.info ("Setting mocktime for EVM node to %d" % timestamp)
+    self.evm.mockTime = timestamp
 
   def clearRegisteredCache (self):
     """
@@ -508,13 +504,13 @@ class Environment:
   def generate (self, num):
     blks = []
     while len (blks) < num:
-      self.ganache.mine ()
+      self.evm.mine ()
       blk, _ = self.getChainTip ()
       blks.append (blk)
     return blks
 
   def getChainTip (self):
-    data = self.ganache.w3.eth.get_block ("latest")
+    data = self.evm.w3.eth.get_block ("latest")
     return uintToXaya (data["hash"].hex ()), data["number"]
 
   def createSignerAddress (self):
@@ -526,7 +522,7 @@ class Environment:
     account = self.lookupSignerAccount (addr)
     assert account is not None, "%s is not a signer address" % addr
     full = "Xaya signature for chain %d:\n\n%s" \
-              % (self.ganache.w3.eth.chain_id, msg)
+              % (self.evm.w3.eth.chain_id, msg)
     encoded = messages.encode_defunct (text=full)
     rawSgn = account.sign_message (encoded).signature
     return codecs.decode (base64.b64encode (rawSgn), "ascii")

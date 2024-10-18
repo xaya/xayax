@@ -80,6 +80,10 @@ const std::map<int64_t, std::string> CHAIN_IDS =
     {137, "polygon"},
     {80'001, "mumbai"},
     {1'337, "ganache"},
+    /* This is anvil from Foundry, but in essence does the same as ganache
+       (i.e. local regtest-like testing on EVM chains).  Which it is does not
+       matter from the game's point of view.  */
+    {31'337, "ganache"},
   };
 
 /**
