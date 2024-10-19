@@ -187,7 +187,7 @@ if __name__ == "__main__":
         },
       ])
 
-      # FIXME: It seems Ganache is not resurrecting transactions.
+      # FIXME: It seems Anvil is not resurrecting transactions.
       # Look into this and see what to do for testing reorgs.
       if False:
         snapshot.restore ()

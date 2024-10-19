@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 # If no HOST is explicitly set, try to detect it automatically.
 if [[ -z $HOST ]]

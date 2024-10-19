@@ -128,6 +128,7 @@ PendingDataExtractor::GetMoves (EthRpcClient& rpc,
      possible, while returning any move events generated.  */
   Json::Value tx(Json::objectValue);
   tx["to"] = from.GetChecksummed ();
+  tx["from"] = from.GetChecksummed ();
   tx["value"] = data["value"];
   tx["data"] = AbiEncoder::ConcatHex (FORWARDER_EXECUTE_FCN,
                                       execArgs.Finalise ());

@@ -46,10 +46,15 @@ def genSignature (abi, typ, name):
     i["type"] for i in inp
   ]) + ")"
 
+def contractPath (nm):
+  """
+  Returns the path of the contract build artefact.
+  """
+
+  return os.path.join ("solidity", "out", f"{nm}.sol", f"{nm}.json")
+
 # Load the XayaAccounts ABI to generate signature hashes.
-with open (os.path.join ("solidity", "node_modules", "@xaya",
-                         "eth-account-registry", "build", "contracts",
-                         "XayaAccounts.json")) as f:
+with open (contractPath ("XayaAccounts"), "rt") as f:
   accAbi = json.load (f)["abi"]
   sgn = genSignature (accAbi, "event", "Move")
   print ("const std::string MOVE_EVENT = \""
@@ -63,17 +68,15 @@ def outputFcnSelector (abi, name, var):
             + hexWithPrefix (Web3.keccak (sgn.encode ("ascii"))[:4])
             + "\";")
 outputFcnSelector (accAbi, "wchiToken", "ACCOUNT_WCHI_FCN")
-with open (os.path.join ("solidity", "build", "contracts",
-                         "CallForwarder.json")) as f:
+with open (contractPath ("CallForwarder"), "rt") as f:
   abi = json.load (f)["abi"]
   outputFcnSelector (abi, "execute", "FORWARDER_EXECUTE_FCN")
 
 # Store the deploying bytecode for our overlay contracts.
 def outputContract (name, var):
-  with open (os.path.join ("solidity", "build", "contracts",
-                           f"{name}.json")) as f:
+  with open (contractPath (name), "rt") as f:
     data = json.load (f)
-    print (f"const std::string {var} = \"{data['bytecode']}\";")
+    print (f"const std::string {var} = \"{data['bytecode']['object']}\";")
 outputContract ("CallForwarder", "CALL_FORWARDER_CODE")
 outputContract ("TrackingAccounts", "TRACKING_ACCOUNTS_CODE")
 

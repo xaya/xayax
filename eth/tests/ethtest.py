@@ -1,4 +1,4 @@
-# Copyright (C) 2021 The Xaya developers
+# Copyright (C) 2021-2024 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -29,7 +29,7 @@ class Fixture (testcase.BaseChainFixture):
   @contextmanager
   def environment (self):
     with super ().environment ():
-      self.w3 = self.env.ganache.w3
+      self.w3 = self.env.evm.w3
       yield
 
   def createBaseChain (self):
@@ -64,17 +64,17 @@ class Fixture (testcase.BaseChainFixture):
     """
 
     scriptPath = os.path.dirname (os.path.abspath (__file__))
-    contracts = os.path.join (scriptPath, "..",
-                              "solidity", "build", "contracts")
+    outdir = os.path.join (scriptPath, "..", "solidity", "out")
 
-    with open (os.path.join (contracts, "MultiMover.json")) as f:
+    with open (os.path.join (outdir, "MultiMover.sol", "MultiMover.json"),
+               "rt") as f:
       data = json.load (f)
 
     if env is None:
       env = self.env
     contracts = env.contracts
-    deployed = env.ganache.deployContract (contracts.account, data,
-                                           contracts.registry.address)
+    deployed = env.evm.deployContract (contracts.account, data,
+                                       contracts.registry.address)
 
     contracts.registry.functions\
         .setApprovalForAll (deployed.address, True)\
