@@ -281,9 +281,6 @@ class EvmNode:
       self.rpc.evm_mine ()
     else:
       self.rpc.evm_mine (self.mockTime)
-      # We need to bump the mock time at least by one second
-      # so the next block can be mined, too.
-      self.mockTime += 1
 
   def deployContract (self, addr, data, *args, **kwargs):
     """
