@@ -429,7 +429,10 @@ public:
   {
     CHECK (log.isObject ());
 
-    CHECK_EQ (log["address"].asString (), parent.accountsContract);
+    const ethutils::Address logAddr(log["address"].asString ());
+    CHECK (logAddr) << "Address returned for log is invalid";
+    CHECK_EQ (logAddr.GetLowerCase (), parent.accountsContract);
+
     CHECK_EQ (log["topics"][0].asString (), MOVE_EVENT);
     CHECK_EQ (ConvertUint256 (log["blockHash"].asString ()), blk.hash);
 
