@@ -58,11 +58,15 @@ def loadJsonData (name):
 def uintToXaya (value):
   """
   Converts a hex literal for an uint256 from Ethereum format
-  (with 0x prefix) to the Xaya format without.
+  (possibly with 0x prefix) to the Xaya format without.
   """
 
-  assert value[:2] == "0x"
-  return value[2:]
+  if len (value) == 66:
+    assert value[:2] == "0x"
+    return value[2:]
+
+  assert len (value) == 64
+  return value
 
 
 class Instance:
