@@ -1,4 +1,4 @@
-# Copyright (C) 2021 The Xaya developers
+# Copyright (C) 2021-2025 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,7 @@ Python, e.g. for regression testing.
 """
 
 
-from xayax import rpcproxy
+from . import rpcproxy
 
 from xayagametest import xaya
 

@@ -10,7 +10,9 @@ xayaxdir = $(pythondir)/xayax
 xayax_PYTHON = __init__.py \
   core.py \
   eth.py \
-  testcase.py
+  gametest.py \
+  testcase.py \
+  rpcproxy.py
 xayax_DATA = $(CONTRACTS)
 
 forgeout = $(top_builddir)/eth/solidity/out
