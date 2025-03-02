@@ -16,6 +16,9 @@ py-compile
 stamp-h1
 test-driver
 
+dist
+*.egg-info
+
 .deps
 .libs
 

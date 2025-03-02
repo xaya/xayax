@@ -1,0 +1,35 @@
+[project]
+name = "xayax"
+version = "1.4.0"
+authors = [
+  { name = "Daniel Kraft", email = "d@domob.eu" },
+]
+description = "Python framework for testing with Xaya X"
+requires-python = ">=3.9"
+dependencies =  [
+  "jsonrpclib-pelix",
+  "requests",
+  "web3==7",
+  "xayagametest",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "License :: OSI Approved :: MIT License",
+]
+readme = "README.md"
+license = {file = "COPYING"}
+
+[project.urls]
+Homepage = "https://xaya.io"
+Repository = "https://github.com/xaya/xayax"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["xayax"]
+
+[tool.setuptools.package-data]
+xayax = ["*.json"]
