@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2021-2022 The Xaya developers
+# Copyright (C) 2021-2025 The Xaya developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,6 +12,7 @@ and returned with the expected data.
 
 import ethtest
 
+from xayax.eth import uintToXaya
 from xayax.testcase import ZmqSubscriber
 
 
@@ -37,7 +38,7 @@ def mvid (f, ns, nm, nonce):
   for ev in events:
     proc = moveEvent.process_log (ev)
     if proc["args"]["nonce"] == nonce:
-      return f.w3.keccak (ev["data"]).hex ()[2:]
+      return uintToXaya (f.w3.keccak (ev["data"]).hex ())
 
   raise AssertionError ("no move logs found for %s/%s nonce %d"
                           % (ns, nm, nonce))

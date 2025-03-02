@@ -1,0 +1,5 @@
+jsonrpclib-pelix
+requests
+web3==7
+xayagametest
+zmq
