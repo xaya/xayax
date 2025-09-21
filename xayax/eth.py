@@ -124,6 +124,7 @@ class Instance:
     args.append ("--datadir=%s" % self.datadir)
     args.append ("--watch_for_pending_moves=%s" % ",".join (watchForPending))
     args.append ("--sanity_checks")
+    args.append ("--max_reorg_depth=1000000")
     envVars = dict (os.environ)
     envVars["GLOG_log_dir"] = self.datadir
     self.proc = subprocess.Popen (args, env=envVars)
