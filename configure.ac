@@ -1,4 +1,4 @@
-AC_INIT([xayax], [0.1])
+AC_INIT([xayax], [1.4.1])
 AM_INIT_AUTOMAKE([subdir-objects])
 
 AC_CONFIG_MACRO_DIR([m4])
