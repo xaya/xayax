@@ -61,6 +61,12 @@ COPY docker/entrypoint.sh bin/
 
 # Construct the final image.
 FROM debian:13-slim
+# Install tini as a lightweight init
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends tini && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /jail /usr/local/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 LABEL description="Xaya X connector binaries"
@@ -75,4 +81,4 @@ ENV HOST=""
 ENV MAX_REORG_DEPTH="1000"
 EXPOSE 8000
 EXPOSE 28555
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-v", "--", "/usr/local/bin/entrypoint.sh"]
