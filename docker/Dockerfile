@@ -5,7 +5,7 @@
 # libxayagame directly, it depends on libxayautil and many of the same base
 # packages like SQLite or libjson-rpc-cpp, so that reusing them for the
 # build from the existing package makes sense.
-FROM xaya/libxayagame@sha256:2303174359025270fa7b4c931bd741d9455fad7173a2d0b2265ad63cc27fe77a AS build
+FROM xaya/libxayagame@sha256:2f9a0fa5acca17bd6de0b3adc1c71bd02140aa536a10746354f28877c7b97cb6 AS build
 RUN apt update && apt -y install \
   autoconf \
   autoconf-archive \

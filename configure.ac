@@ -30,24 +30,29 @@ AC_CHECK_HEADER([websocketpp/client.hpp], [],
 # See https://hpc.nih.gov/development/glog.html.
 CXXFLAGS="${CXXFLAGS} -DGLOG_NO_ABBREVIATED_SEVERITIES"
 
+PKG_PROG_PKG_CONFIG
+
 # Public dependencies (exposed in the headers of xayax to
-# users of the library).
-AX_PKG_CHECK_MODULES([JSONCPP], [jsoncpp], [])
+# users of the library).  Note that we use PKG_CHECK_MODULES
+# here without the explicit split in public / private as we do not need
+# this (the library is not usually used as such apart from the
+# binaries, and also doesn't have a .pc.in file).
+PKG_CHECK_MODULES([JSONCPP], [jsoncpp])
 
 # Private dependencies of the library itself.
-AX_PKG_CHECK_MODULES([XAYAUTIL], [], [libxayautil])
-AX_PKG_CHECK_MODULES([JSONRPCCLIENT], [], [libjsonrpccpp-client])
-AX_PKG_CHECK_MODULES([JSONRPCSERVER], [], [libjsonrpccpp-server])
-AX_PKG_CHECK_MODULES([GLOG], [], [libglog])
-AX_PKG_CHECK_MODULES([PROTOBUF], [], [protobuf])
-AX_PKG_CHECK_MODULES([SQLITE3], [], [sqlite3])
-AX_PKG_CHECK_MODULES([UNIVALUE], [], [libunivalue])
-AX_PKG_CHECK_MODULES([MYPP], [], [mypp])
-AX_PKG_CHECK_MODULES([MARIADB], [], [mariadb])
+PKG_CHECK_MODULES_STATIC([XAYAUTIL], [libxayautil])
+PKG_CHECK_MODULES([JSONRPCCLIENT], [libjsonrpccpp-client])
+PKG_CHECK_MODULES([JSONRPCSERVER], [libjsonrpccpp-server])
+PKG_CHECK_MODULES([GLOG], [libglog])
+PKG_CHECK_MODULES([PROTOBUF], [protobuf])
+PKG_CHECK_MODULES([SQLITE3], [sqlite3])
+PKG_CHECK_MODULES([UNIVALUE], [libunivalue])
+PKG_CHECK_MODULES([MYPP], [mypp])
+PKG_CHECK_MODULES([MARIADB], [mariadb])
 # We use the recv variant taking message_t& over deprecated older functions,
 # which requires at least version 4.3.1.
-AX_PKG_CHECK_MODULES([ZMQ], [], [libzmq >= 4.3.1])
-AX_PKG_CHECK_MODULES([GFLAGS], [], [gflags])
+PKG_CHECK_MODULES([ZMQ], [libzmq >= 4.3.1])
+PKG_CHECK_MODULES([GFLAGS], [gflags])
 
 # Private dependencies that are not needed for the library, but only for
 # the unit tests and the binaries.
