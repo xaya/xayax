@@ -58,13 +58,14 @@ RUN for b in /usr/local/bin/xayax-*; \
     cpld bin/$(basename $b) lib64; \
   done
 COPY docker/entrypoint.sh bin/
+COPY docker/healthcheck.sh bin/
 
 # Construct the final image.
 FROM debian:13-slim
 # Install tini as a lightweight init
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends tini && \
+    apt-get install -y --no-install-recommends curl tini && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /jail /usr/local/
