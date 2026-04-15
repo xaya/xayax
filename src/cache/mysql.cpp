@@ -1,4 +1,4 @@
-// Copyright (C) 2023-2024 The Xaya developers
+// Copyright (C) 2023-2026 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -99,31 +99,32 @@ MySqlBlockStorage::Implementation::Connect (
 void
 MySqlBlockStorage::Implementation::Store (const std::vector<BlockData>& blocks)
 {
+  mypp::Statement stmt(*connection);
+  try
+    {
+      stmt.Prepare (2, R"(
+        REPLACE INTO `)" + table + R"(`
+          (`height`, `data`) VALUES (?, ?)
+      )");
+    }
+  catch (const mypp::Error& exc)
+    {
+      LOG (WARNING) << "Failed to prepare statement: " << exc.what ();
+      return;
+    }
+
   for (const auto& b : blocks)
     {
-      mypp::Statement stmt(*connection);
       try
         {
-          stmt.Prepare (2, R"(
-            REPLACE INTO `)" + table + R"(`
-              (`height`, `data`) VALUES (?, ?)
-          )");
-        }
-      catch (const mypp::Error& exc)
-        {
-          LOG (FATAL) << exc.what ();
-        }
-
-      stmt.Bind<int64_t> (0, b.height);
-      stmt.BindBlob (1, b.Serialise ());
-
-      try
-        {
+          stmt.Reset ();
+          stmt.Bind<int64_t> (0, b.height);
+          stmt.BindBlob (1, b.Serialise ());
           stmt.Execute ();
         }
       catch (const mypp::Error& exc)
         {
-          LOG (WARNING) << exc.what ();
+          LOG (WARNING) << "Failed to insert into block cache: " << exc.what ();
           /* We continue here and try the next block.  It is not fatal
              if one of them failed to insert for whatever reason.  */
         }
@@ -134,26 +135,19 @@ std::vector<BlockData>
 MySqlBlockStorage::Implementation::GetRange (const uint64_t start,
                                              const uint64_t count)
 {
-  mypp::Statement stmt(*connection);
   try
     {
+      mypp::Statement stmt(*connection);
       stmt.Prepare (2, R"(
         SELECT `data`
           FROM `)" + table + R"(`
           WHERE `height` >= ? AND `height` < ?
           ORDER BY `height` ASC
       )");
-    }
-  catch (const mypp::Error& exc)
-    {
-      LOG (FATAL) << exc.what ();
-    }
 
-  stmt.Bind<int64_t> (0, start);
-  stmt.Bind<int64_t> (1, start + count);
+      stmt.Bind<int64_t> (0, start);
+      stmt.Bind<int64_t> (1, start + count);
 
-  try
-    {
       stmt.Query ();
 
       std::vector<BlockData> res;
@@ -167,7 +161,8 @@ MySqlBlockStorage::Implementation::GetRange (const uint64_t start,
     }
   catch (const mypp::Error& exc)
     {
-      LOG (WARNING) << exc.what ();
+      LOG (WARNING)
+          << "Failed to retrieve data from block cache: " << exc.what ();
       return {};
     }
 }
@@ -209,10 +204,14 @@ MySqlBlockStorage::Connect (const std::string& url)
                      parser.GetOption ("ssl-key"));
     }
 
-  CHECK (impl->Connect (parser.GetHost (), parser.GetPort (),
-                        parser.GetUser (), parser.GetPassword (),
-                        parser.GetDatabase (), parser.GetTable ()))
-      << "Failed to make MySQL connection";
+  if (!impl->Connect (parser.GetHost (), parser.GetPort (),
+                      parser.GetUser (), parser.GetPassword (),
+                      parser.GetDatabase (), parser.GetTable ()))
+    {
+      LOG (ERROR) << "Failed to make MySQL connection";
+      impl.reset ();
+      return false;
+    }
 
   return true;
 }
