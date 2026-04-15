@@ -5,8 +5,8 @@
 # libxayagame directly, it depends on libxayautil and many of the same base
 # packages like SQLite or libjson-rpc-cpp, so that reusing them for the
 # build from the existing package makes sense.
-FROM xaya/libxayagame@sha256:2f9a0fa5acca17bd6de0b3adc1c71bd02140aa536a10746354f28877c7b97cb6 AS build
-RUN apt update && apt -y install \
+FROM xaya/libxayagame:a9c941dd09bbfd4fdf5956fc93ace99c27b5fd12 AS build
+RUN apt update && apt -y install --no-install-recommends \
   autoconf \
   autoconf-archive \
   automake \
@@ -14,6 +14,7 @@ RUN apt update && apt -y install \
   libunivalue-dev \
   libwebsocketpp-dev \
   build-essential \
+  ca-certificates \
   cmake \
   curl \
   git \
