@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2024 The Xaya developers
+// Copyright (C) 2021-2026 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -54,6 +54,23 @@ private:
 
   /** Mutex for the chainstate.  */
   std::mutex mutChain;
+
+  /**
+   * Cheap lock protecting the cached tip state below.  This is separate
+   * from mutChain so that lightweight status reads (getblockchaininfo) never
+   * have to wait for the sync thread's main lock.
+   */
+  std::mutex mutState;
+
+  /**
+   * Cached tip height, kept up-to-date by TipUpdatedFrom, for use
+   * with the light-weight mutState (and not mutChain) for simple
+   * status reads such as getblockchaininfo.
+   */
+  int64_t cachedTipHeight = -1;
+
+  /** Cached tip hash matching the tip height.  */
+  std::string cachedTipHash;
 
   Chainstate chain;
   std::unique_ptr<Sync> sync;
@@ -300,21 +317,21 @@ Controller::RpcServer::getblockchaininfo ()
     res["chain"] = cachedChain;
   }
 
-  std::lock_guard<std::mutex> lockChain(run.mutChain);
-  const auto tipHeight = run.chain.GetTipHeight ();
-  if (tipHeight == -1)
+  /* Read the tip from the cheap state cache rather than acquiring mutChain.
+     This avoids blocking behind the sync thread's mutex.  The cached values
+     may lag one (the current) sync step but that is perfectly acceptable
+     for status polling.  */
+  std::lock_guard<std::mutex> lockState(run.mutState);
+  if (run.cachedTipHeight == -1)
     {
       res["blocks"] = -1;
       res["bestblockhash"] = "";
     }
   else
     {
-      CHECK_GE (tipHeight, 0);
-      res["blocks"] = static_cast<Json::Int64> (tipHeight);
-
-      std::string tipHash;
-      CHECK (run.chain.GetHashForHeight (tipHeight, tipHash));
-      res["bestblockhash"] = tipHash;
+      CHECK_GE (run.cachedTipHeight, 0);
+      res["blocks"] = static_cast<Json::Int64> (run.cachedTipHeight);
+      res["bestblockhash"] = run.cachedTipHash;
     }
 
   return res;
@@ -615,6 +632,18 @@ Controller::RunData::TipUpdatedFrom (const std::string& oldTip,
   const auto tipHeight = chain.GetTipHeight ();
   if (tipHeight > parent.maxReorgDepth + 1)
     chain.Prune (tipHeight - parent.maxReorgDepth - 1);
+
+  /* Update the cheap state cache so that getblockchaininfo can read the
+     current tip without having to acquire mutChain.  We do this after
+     pruning so the cached height always corresponds to a block that is
+     still in the local chainstate.  */
+  std::string newTipHash;
+  CHECK (chain.GetHashForHeight (tipHeight, newTipHash));
+  {
+    std::lock_guard<std::mutex> lockState(mutState);
+    cachedTipHeight = tipHeight;
+    cachedTipHash = std::move (newTipHash);
+  }
 }
 
 bool
