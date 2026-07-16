@@ -40,13 +40,6 @@ constexpr auto BACKOFF_MAX = std::chrono::seconds (30);
 /** A session that stayed up at least this long resets the backoff.  */
 constexpr auto BACKOFF_RESET_AFTER = std::chrono::seconds (60);
 
-/**
- * If no message (including subscription notifications) arrives for this
- * long, the connection is assumed half-open (e.g. a silently dropped proxy
- * or load-balancer path) and is torn down for a reconnect.  New heads arrive
- * every few seconds on active chains, so this is very conservative.
- */
-constexpr auto STALE_TIMEOUT = std::chrono::minutes (3);
 /** How often the watchdog checks for staleness.  */
 constexpr auto WATCHDOG_INTERVAL = std::chrono::seconds (30);
 
@@ -416,6 +409,15 @@ private:
   const std::string url;
   Callbacks& cb;
 
+  /**
+   * Staleness timeout for the watchdog.  If no message (including
+   * subscription notifications) arrives on an open connection for this
+   * long, it is assumed half-open (e.g. a silently dropped proxy or
+   * load-balancer path) and torn down for a reconnect.  Zero disables
+   * the watchdog entirely.
+   */
+  const std::chrono::milliseconds staleness;
+
   std::atomic<bool> shouldStop{false};
   std::atomic<bool> pendingWanted{false};
 
@@ -508,9 +510,7 @@ private:
         if (s == nullptr || !s->WasOpened ())
           continue;
 
-        const auto staleMs = std::chrono::duration_cast<
-            std::chrono::milliseconds> (STALE_TIMEOUT).count ();
-        if (s->MessageAgeMs () > staleMs)
+        if (s->MessageAgeMs () > staleness.count ())
           {
             LOG (WARNING)
                 << "WebSocket to " << url << " received no message for "
@@ -523,13 +523,15 @@ private:
 
 public:
 
-  explicit Connection (const std::string& u, Callbacks& c)
-    : url(u), cb(c)
+  explicit Connection (const std::string& u, Callbacks& c,
+                       const std::chrono::milliseconds st)
+    : url(u), cb(c), staleness(st)
   {
     supervisor = std::make_unique<std::thread> (
         [this] () { SupervisorLoop (); });
-    watchdog = std::make_unique<std::thread> (
-        [this] () { WatchdogLoop (); });
+    if (staleness.count () > 0)
+      watchdog = std::make_unique<std::thread> (
+          [this] () { WatchdogLoop (); });
   }
 
   ~Connection ()
@@ -541,7 +543,8 @@ public:
     if (s != nullptr)
       s->RequestStop ();
 
-    watchdog->join ();
+    if (watchdog != nullptr)
+      watchdog->join ();
     supervisor->join ();
   }
 
@@ -568,9 +571,17 @@ WebSocketSubscriber::~WebSocketSubscriber ()
 }
 
 void
+WebSocketSubscriber::SetStalenessTimeout (const std::chrono::milliseconds timeout)
+{
+  CHECK (connection == nullptr)
+      << "SetStalenessTimeout must be called before Start";
+  stalenessTimeout = timeout;
+}
+
+void
 WebSocketSubscriber::Start (Callbacks& cb)
 {
-  connection = std::make_unique<Connection> (endpoint, cb);
+  connection = std::make_unique<Connection> (endpoint, cb, stalenessTimeout);
 }
 
 void
