@@ -7,52 +7,43 @@
 # build from the existing package makes sense.
 FROM xaya/libxayagame:0afa48e35b6d83095d85daa6b8923cec550f8508 AS build
 RUN apt update && apt -y install --no-install-recommends \
-  autoconf \
-  autoconf-archive \
-  automake \
-  libboost-all-dev \
-  libunivalue-dev \
-  libwebsocketpp-dev \
   build-essential \
   ca-certificates \
   cmake \
   curl \
   git \
+  libboost-all-dev \
   libgflags-dev \
-  libtool \
   libmariadb-dev \
+  libunivalue-dev \
+  libwebsocketpp-dev \
   pkg-config \
-  python3-pip \
-  python3-dev
+  python3-dev \
+  python3-venv
 
 # Number of parallel cores to use for make builds.
 ARG N=1
 
 # Install Foundry.  It seems pretty hard to get "foundryup" to run inside
 # Docker, so we just download and manually install a specific release.
-ARG FOUNDRY_RELEASE="nightly-1186156961f648273299ac067d098ee0e33a0d7e"
+ARG FOUNDRY_RELEASE="v1.7.1"
 WORKDIR /usr/local/bin
-RUN curl -L "https://github.com/foundry-rs/foundry/releases/download/${FOUNDRY_RELEASE}/foundry_nightly_linux_amd64.tar.gz" | tar zxv
+RUN curl -L "https://github.com/foundry-rs/foundry/releases/download/${FOUNDRY_RELEASE}/foundry_${FOUNDRY_RELEASE}_linux_amd64.tar.gz" | tar zxv
 
 # Build and install mypp.
 ARG MYPP_COMMIT="abd1f63b8f92543c929b642f49cd81617594b12e"
 WORKDIR /usr/src/mypp
 RUN git clone https://github.com/xaya/mypp . \
   && git checkout ${MYPP_COMMIT}
-RUN rm -rf build && cmake -B build \
+RUN rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j${N} && cmake --install build --strip
 
 # Build and install Xaya X itself.  Make sure to clean out any
 # potential garbage copied over in the build context.
 WORKDIR /usr/src/xayax
 COPY . .
-RUN pip3 install --break-system-packages -r requirements.txt
-RUN make distclean || true
-RUN ./autogen.sh && ./configure
-# Build the solidity contracts first, so that they are already
-# available for the python script that generates contract-constants.cpp.
-RUN make -C eth/solidity
-RUN make -j${N} && make install-strip
+RUN rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build -j${N} && cmake --install build --strip
 
 # Collect the binaries and required libraries.
 WORKDIR /jail

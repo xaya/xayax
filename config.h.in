@@ -1,0 +1,6 @@
+#ifndef XAYAX_CONFIG_H
+#define XAYAX_CONFIG_H
+
+#define PACKAGE_VERSION "@PROJECT_VERSION@"
+
+#endif

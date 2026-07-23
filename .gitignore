@@ -1,34 +1,8 @@
-INSTALL
-aclocal.m4
-ar-lib
-autom4te.cache
-compile
-confdefs.h
-config.*
-configure
-depcomp
-install-sh
-libtool
-ltmain.sh
-m4
-missing
-py-compile
-stamp-h1
-test-driver
+build/
 
 dist
 *.egg-info
 
-.deps
-.libs
-
-Makefile
-Makefile.in
 __pycache__
-.dirstamp
-
-*.lo
-*.la
-*.trs
-*.o
 *.log
+.env
