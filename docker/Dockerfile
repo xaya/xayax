@@ -5,7 +5,7 @@
 # libxayagame directly, it depends on libxayautil and many of the same base
 # packages like SQLite or libjson-rpc-cpp, so that reusing them for the
 # build from the existing package makes sense.
-FROM xaya/libxayagame:a9c941dd09bbfd4fdf5956fc93ace99c27b5fd12 AS build
+FROM xaya/libxayagame:0afa48e35b6d83095d85daa6b8923cec550f8508 AS build
 RUN apt update && apt -y install --no-install-recommends \
   autoconf \
   autoconf-archive \
@@ -25,6 +25,9 @@ RUN apt update && apt -y install --no-install-recommends \
   python3-pip \
   python3-dev
 
+# Number of parallel cores to use for make builds.
+ARG N=1
+
 # Install Foundry.  It seems pretty hard to get "foundryup" to run inside
 # Docker, so we just download and manually install a specific release.
 ARG FOUNDRY_RELEASE="nightly-1186156961f648273299ac067d098ee0e33a0d7e"
@@ -32,11 +35,12 @@ WORKDIR /usr/local/bin
 RUN curl -L "https://github.com/foundry-rs/foundry/releases/download/${FOUNDRY_RELEASE}/foundry_nightly_linux_amd64.tar.gz" | tar zxv
 
 # Build and install mypp.
-ARG MYPP_COMMIT="c3895a6b157d1cb68e9d9c6835ec11b01278312c"
+ARG MYPP_COMMIT="abd1f63b8f92543c929b642f49cd81617594b12e"
 WORKDIR /usr/src/mypp
 RUN git clone https://github.com/xaya/mypp . \
   && git checkout ${MYPP_COMMIT}
-RUN ./autogen.sh && ./configure && make && make install-strip
+RUN rm -rf build && cmake -B build \
+    && cmake --build build -j${N} && cmake --install build --strip
 
 # Build and install Xaya X itself.  Make sure to clean out any
 # potential garbage copied over in the build context.
@@ -48,7 +52,7 @@ RUN ./autogen.sh && ./configure
 # Build the solidity contracts first, so that they are already
 # available for the python script that generates contract-constants.cpp.
 RUN make -C eth/solidity
-RUN make && make install-strip
+RUN make -j${N} && make install-strip
 
 # Collect the binaries and required libraries.
 WORKDIR /jail
