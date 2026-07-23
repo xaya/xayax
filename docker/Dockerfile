@@ -71,6 +71,10 @@ RUN apt-get update && \
 
 COPY --from=build /jail /usr/local/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# The bundle above is a single file without hashed symlinks, so OpenSSL's
+# default directory lookup cannot find it; point directly at the file so
+# TLS verification (e.g. wss:// websocket endpoints) works.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 LABEL description="Xaya X connector binaries"
 # The image uses /log to store logs and /xayax to store the local state.
 # These are not explicitly declared as VOLUME, though, since it is always

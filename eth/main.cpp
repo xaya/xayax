@@ -12,6 +12,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 
@@ -22,6 +23,9 @@ DEFINE_string (eth_rpc_url, "",
                "URL for the Ethereum JSON-RPC interface");
 DEFINE_string (eth_ws_url, "",
                "URL for the Ethereum websocket endpoint");
+DEFINE_int32 (eth_ws_stale_timeout, 180,
+              "seconds without any websocket message before the connection"
+              " is assumed dead and reconnected (0 disables the check)");
 DEFINE_string (accounts_contract, "",
                "Address of the Xaya accounts registry contract to use");
 
@@ -95,9 +99,14 @@ main (int argc, char* argv[])
         throw std::runtime_error ("--datadir must be set");
       if (FLAGS_max_reorg_depth < 0)
         throw std::runtime_error ("--max_reorg_depth must not be negative");
+      if (FLAGS_eth_ws_stale_timeout < 0)
+        throw std::runtime_error (
+            "--eth_ws_stale_timeout must not be negative");
 
       xayax::EthChain base(FLAGS_eth_rpc_url, FLAGS_eth_ws_url,
                            FLAGS_accounts_contract);
+      base.SetWsStaleTimeout (
+          std::chrono::seconds (FLAGS_eth_ws_stale_timeout));
       base.Start ();
 
       std::unique_ptr<xayax::BlockCacheChain::Storage> cacheStore;

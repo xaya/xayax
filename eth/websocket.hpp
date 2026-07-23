@@ -5,6 +5,7 @@
 #ifndef XAYAX_ETH_WEBSOCKET_HPP
 #define XAYAX_ETH_WEBSOCKET_HPP
 
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -26,6 +27,15 @@ private:
   /** The endpoint to connect to.  */
   const std::string endpoint;
 
+  /**
+   * If no message arrives on an open connection for this long, the
+   * watchdog assumes it is half-open and tears it down for a reconnect.
+   * Zero (the default) disables staleness checking: a sensible timeout
+   * depends on the underlying chain's block cadence, so the caller has
+   * to opt in with a value that matches it.
+   */
+  std::chrono::milliseconds stalenessTimeout{0};
+
   /** The active connection (if any).  */
   std::unique_ptr<Connection> connection;
 
@@ -35,6 +45,13 @@ public:
 
   explicit WebSocketSubscriber (const std::string& ep);
   ~WebSocketSubscriber ();
+
+  /**
+   * Sets the staleness timeout after which a silent but open connection
+   * is torn down and reconnected.  Zero disables the check (the default).
+   * Must be called before Start.
+   */
+  void SetStalenessTimeout (std::chrono::milliseconds timeout);
 
   /**
    * Opens the connection and starts the listening thread.  When notifications

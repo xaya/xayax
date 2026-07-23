@@ -260,6 +260,13 @@ EthChain::NewPendingTx (const std::string& txid)
 }
 
 void
+EthChain::SetWsStaleTimeout (const std::chrono::milliseconds timeout)
+{
+  if (sub != nullptr)
+    sub->SetStalenessTimeout (timeout);
+}
+
+void
 EthChain::Start ()
 {
   EthRpc rpc(*this);

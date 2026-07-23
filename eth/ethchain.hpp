@@ -123,6 +123,13 @@ public:
    */
   void AddWatchedContract (const std::string& addr);
 
+  /**
+   * Sets the staleness timeout on the WebSocket subscriber (if there is
+   * one), after which a silent connection is torn down and reconnected.
+   * Zero disables the check.  Must be called before Start.
+   */
+  void SetWsStaleTimeout (std::chrono::milliseconds timeout);
+
   void Start () override;
   bool EnablePending () override;
 
