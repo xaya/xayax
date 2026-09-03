@@ -6,6 +6,8 @@
 
 #include "testutils.hpp"
 
+#include <mypp/connection.hpp>
+#include <mypp/statement.hpp>
 #include <mypp/tempdb.hpp>
 
 #include <glog/logging.h>
@@ -231,6 +233,64 @@ TEST_F (MySqlBlockStorageTests, Storage)
   EXPECT_THAT (store->GetRange (100, 2), ElementsAre ());
   EXPECT_THAT (store->GetRange (8, 4),
                ElementsAre (GetBlock (10), GetBlock (11)));
+}
+
+TEST_F (MySqlBlockStorageTests, ReconnectsAfterLostConnection)
+{
+  /* Kills the storage's server-side session (every other session of our
+     user is the storage's), as an idle reap or a server restart would.  */
+  const auto killStorageSession = [this] ()
+    {
+      std::vector<int64_t> ids;
+      {
+        mypp::Statement stmt(*db.Get ());
+        stmt.Prepare (0, R"(
+          SELECT `id`
+            FROM information_schema.processlist
+            WHERE `user` = SUBSTRING_INDEX (CURRENT_USER (), '@', 1)
+              AND `id` <> CONNECTION_ID ()
+        )");
+        stmt.Query ();
+        while (stmt.Fetch ())
+          ids.push_back (stmt.Get<int64_t> ("id"));
+      }
+      ASSERT_FALSE (ids.empty ());
+      for (const auto id : ids)
+        {
+          mypp::Statement stmt(*db.Get ());
+          stmt.Prepare (1, "KILL ?");
+          stmt.Bind<int64_t> (0, id);
+          stmt.Execute ();
+        }
+    };
+
+  store->Store (GetRange (10, 5));
+  EXPECT_THAT (store->GetRange (10, 2),
+               ElementsAre (GetBlock (10), GetBlock (11)));
+
+  /* Both reading and writing must work again on a fresh connection
+     instead of failing forever.  Each is tried on a freshly killed
+     session, so that each of them triggers the reconnect itself.  */
+  killStorageSession ();
+  EXPECT_THAT (store->GetRange (10, 2),
+               ElementsAre (GetBlock (10), GetBlock (11)));
+
+  killStorageSession ();
+  store->Store (GetRange (20, 2));
+  EXPECT_THAT (store->GetRange (20, 2),
+               ElementsAre (GetBlock (20), GetBlock (21)));
+}
+
+TEST_F (MySqlBlockStorageTests, KeepsStoringAfterFailedInsert)
+{
+  db.Get ().Execute (R"(
+    ALTER TABLE `cached_blocks`
+      ADD CONSTRAINT CHECK (`height` <> 11)
+  )");
+
+  store->Store (GetRange (10, 3));
+  EXPECT_THAT (store->GetRange (10, 3),
+               ElementsAre (GetBlock (10), GetBlock (12)));
 }
 
 /* ************************************************************************** */
