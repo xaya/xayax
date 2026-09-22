@@ -340,6 +340,9 @@ Controller::RpcServer::getblockchaininfo ()
 std::string
 Controller::RpcServer::getblockhash (const int height)
 {
+  if (height < 0)
+    throw jsonrpc::JsonRpcException (-8, "block height out of range");
+
   std::lock_guard<std::mutex> lock(run.mutChain);
 
   std::string hash;
@@ -563,6 +566,12 @@ Controller::RunData::RunData (Controller& p, const std::string& dbFile)
 
   if (parent.rpcListenLocally)
     http.BindLocalhost ();
+
+  /* An unchanged indexed chain may never call TipUpdatedFrom.  Initialise
+     status before RPC or the sync worker can access it.  */
+  cachedTipHeight = chain.GetTipHeight ();
+  if (cachedTipHeight >= 0)
+    CHECK (chain.GetHashForHeight (cachedTipHeight, cachedTipHash));
 
   rpc = std::make_unique<RpcServer> (http, *this);
   rpc->StartListening ();

@@ -478,6 +478,8 @@ TEST_F (ControllerRpcTests, GetBlockchainInfo)
 {
   const auto a = base.SetTip (base.NewBlock ());
   WaitForZmqTip (a);
+  /* Status is cached after ZMQ publication; finish that sync step first.  */
+  DisableSync ();
 
   /* The first call to getblockchaininfo will cache the chain.  */
   base.SetChain ("foo");
@@ -499,12 +501,26 @@ TEST_F (ControllerRpcTests, GetBlockHashAndHeader)
 
   EXPECT_EQ (rpc.getblockhash (genesis.height), genesis.hash);
   EXPECT_EQ (rpc.getblockhash (a.height), b.hash);
+  EXPECT_THROW (rpc.getblockhash (-1), jsonrpc::JsonRpcException);
+  EXPECT_THROW (rpc.getblockhash (-2), jsonrpc::JsonRpcException);
   EXPECT_THROW (rpc.getblockhash (a.height + 1), jsonrpc::JsonRpcException);
+  EXPECT_EQ (rpc.getblockhash (b.height), b.hash);
 
   const auto hdr = rpc.getblockheader (a.hash);
   EXPECT_EQ (hdr["hash"], a.hash);
   EXPECT_EQ (hdr["height"].asInt (), a.height);
   EXPECT_THROW (rpc.getblockheader ("invalid"), jsonrpc::JsonRpcException);
+}
+
+TEST_F (ControllerRpcTests, RestartWithUnchangedTip)
+{
+  const auto tip = base.SetTip (base.NewBlock ());
+  WaitForZmqTip (tip);
+  Restart ();
+
+  const auto info = rpc.getblockchaininfo ();
+  EXPECT_EQ (info["blocks"].asInt64 (), tip.height);
+  EXPECT_EQ (info["bestblockhash"], tip.hash);
 }
 
 TEST_F (ControllerRpcTests, Pending)
@@ -564,6 +580,7 @@ TEST_F (ControllerRpcTests, BaseChainErrors)
   base.SetTip (base.NewBlock ());
   const auto blk = base.SetTip (base.NewBlock ());
   WaitForZmqTip (blk);
+  DisableSync ();
 
   /* Cache chain and version.  */
   base.SetChain ("foo");
