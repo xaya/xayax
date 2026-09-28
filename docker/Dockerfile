@@ -5,7 +5,7 @@
 # libxayagame directly, it depends on libxayautil and many of the same base
 # packages like SQLite or libjson-rpc-cpp, so that reusing them for the
 # build from the existing package makes sense.
-FROM xaya/libxayagame:0afa48e35b6d83095d85daa6b8923cec550f8508 AS build
+FROM xaya/libxayagame:1e842615fc3685fe9f4beb9e6ae84e38be4c9b3d AS build
 RUN apt update && apt -y install --no-install-recommends \
   build-essential \
   ca-certificates \

@@ -52,12 +52,18 @@ ParseMoveJson (const std::string& txid, const std::string& str,
   Json::CharReaderBuilder rbuilder;
   rbuilder["allowComments"] = false;
   rbuilder["strictRoot"] = true;
+  rbuilder["allowDroppedNullPlaceholders"] = false;
+  rbuilder["allowNumericKeys"] = false;
+  rbuilder["allowSingleQuotes"] = false;
+  rbuilder["allowTrailingCommas"] = false;
   rbuilder["failIfExtra"] = true;
   /* Univalue accepts duplicate keys, so it may forward moves to
      us that contain duplicate keys.  We need to handle them gracefully when
      parsing.  Specifically, we reject them, but just fail (instead of
      aborting) and ignore this move.  */
   rbuilder["rejectDupKeys"] = true;
+  rbuilder["skipBom"] = false;
+  rbuilder["allowSpecialFloats"] = false;
 
   std::string parseErrs;
   std::istringstream in(filtered);
