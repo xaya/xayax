@@ -5,7 +5,7 @@
 # libxayagame directly, it depends on libxayautil and many of the same base
 # packages like SQLite or libjson-rpc-cpp, so that reusing them for the
 # build from the existing package makes sense.
-FROM xaya/libxayagame:1e842615fc3685fe9f4beb9e6ae84e38be4c9b3d AS build
+FROM xaya/libxayagame:848c124db234bb6c62d33cd69ebc92783fe40920 AS build
 RUN apt update && apt -y install --no-install-recommends \
   build-essential \
   ca-certificates \
@@ -45,26 +45,29 @@ COPY . .
 RUN rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j${N} && cmake --install build --strip
 
-# Collect the binaries and required libraries.
+# Collect the binaries and required libraries.  cpld copies the
+# locally built libraries and records the Debian packages needed for
+# the rest in "packages.txt".
 WORKDIR /jail
-RUN mkdir bin
-RUN for b in /usr/local/bin/xayax-*; \
-  do \
-    cp $b bin/; \
-    cpld bin/$(basename $b) lib64; \
-  done
+RUN mkdir bin \
+  && for b in /usr/local/bin/xayax-*; do cp "$b" bin/; done \
+  && touch packages.txt \
+  && for b in bin/*; do cpld "$b" lib64 packages.txt; done \
+  && sort -u -o packages.txt packages.txt
 COPY docker/entrypoint.sh bin/
 COPY docker/healthcheck.sh bin/
 
 # Construct the final image.
 FROM debian:13-slim
-# Install tini as a lightweight init
+COPY --from=build /jail /usr/local/
+# Install tini as a lightweight init, along with the Debian packages
+# cpld reported for the runtime libraries it did not copy itself.
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends curl tini && \
+    apt-get install -y --no-install-recommends curl tini $(cat /usr/local/packages.txt) && \
+    rm -f /usr/local/packages.txt && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /jail /usr/local/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # The bundle above is a single file without hashed symlinks, so OpenSSL's
 # default directory lookup cannot find it; point directly at the file so
