@@ -107,7 +107,6 @@ main (int argc, char* argv[])
                            FLAGS_accounts_contract);
       base.SetWsStaleTimeout (
           std::chrono::seconds (FLAGS_eth_ws_stale_timeout));
-      base.Start ();
 
       std::unique_ptr<xayax::BlockCacheChain::Storage> cacheStore;
       if (FLAGS_blockcache_memory)
@@ -130,6 +129,11 @@ main (int argc, char* argv[])
           cacheStore = std::move (mysqlStore);
           LOG (INFO) << "Using MySQL block cache";
         }
+
+      /* Only start the WebSocket subscription once the local setup has
+         succeeded, so a failure there exits without any network threads.  */
+      base.Start ();
+
       std::unique_ptr<xayax::BlockCacheChain> cache;
       if (cacheStore != nullptr)
         cache = std::make_unique<xayax::BlockCacheChain> (

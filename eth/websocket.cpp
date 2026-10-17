@@ -153,6 +153,12 @@ private:
   Client endpoint;
   websocketpp::connection_hdl hdl;
 
+  /**
+   * Lock for hdl, and for the decision whether to connect at all, so that
+   * a stop request either sees the connection or prevents it.
+   */
+  std::mutex mutHdl;
+
   std::atomic<bool> shouldStop{false};
   std::atomic<bool> opened{false};
 
@@ -164,6 +170,18 @@ private:
   {
     return std::chrono::duration_cast<std::chrono::milliseconds> (
         std::chrono::steady_clock::now ().time_since_epoch ()).count ();
+  }
+
+  /** Closes the connection if a stop was requested, returning whether.  */
+  bool
+  CloseIfStopping (const websocketpp::connection_hdl h)
+  {
+    if (!shouldStop)
+      return false;
+    websocketpp::lib::error_code ec;
+    endpoint.get_con_from_hdl (h)
+        ->close (websocketpp::close::status::normal, "", ec);
+    return true;
   }
 
   void
@@ -280,6 +298,10 @@ public:
         endpoint.set_open_handler (
           [this] (const websocketpp::connection_hdl h)
             {
+              /* A stop requested during the handshake could not close the
+                 connection yet, so it has to happen now.  */
+              if (CloseIfStopping (h))
+                return;
               opened = true;
               lastMessage = NowMs ();
               LOG (INFO) << "WebSocket connection established: " << url;
@@ -314,12 +336,7 @@ public:
         endpoint.set_interrupt_handler (
           [this] (const websocketpp::connection_hdl h)
             {
-              if (shouldStop)
-                {
-                  websocketpp::lib::error_code ec;
-                  endpoint.get_con_from_hdl (h)
-                      ->close (websocketpp::close::status::normal, "", ec);
-                }
+              CloseIfStopping (h);
             });
 
         websocketpp::lib::error_code ec;
@@ -331,8 +348,13 @@ public:
             return;
           }
 
-        hdl = conn->get_handle ();
-        endpoint.connect (conn);
+        {
+          std::lock_guard<std::mutex> lock(mutHdl);
+          if (shouldStop)
+            return;
+          hdl = conn->get_handle ();
+          endpoint.connect (conn);
+        }
 
         /* Runs until the connection is closed or fails; with no pending
            handlers left, this returns and the supervisor decides whether
@@ -348,7 +370,11 @@ public:
   void
   RequestStop () override
   {
+    std::lock_guard<std::mutex> lock(mutHdl);
     shouldStop = true;
+    /* Without a connection yet, Run sees shouldStop and does not connect.  */
+    if (hdl.expired ())
+      return;
     try
       {
         endpoint.interrupt (hdl);
@@ -363,6 +389,7 @@ public:
   void
   EnablePending () override
   {
+    std::lock_guard<std::mutex> lock(mutHdl);
     try
       {
         auto conn = endpoint.get_con_from_hdl (hdl);
@@ -466,7 +493,11 @@ private:
       {
         auto s = MakeSession ();
         {
+          /* Checked under the lock, so a concurrent stop either finds
+             this session to stop or is seen here.  */
           std::lock_guard<std::mutex> lock(mutSession);
+          if (shouldStop)
+            break;
           session = s;
         }
 
