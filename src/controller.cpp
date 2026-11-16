@@ -35,6 +35,9 @@ namespace
 
 namespace fs = std::experimental::filesystem;
 
+/** Maximum length of a tracking token, in bytes.  */
+constexpr size_t MAX_TRACKING_TOKEN_LEN = 64;
+
 } // anonymous namespace
 
 /* ************************************************************************** */
@@ -188,7 +191,10 @@ public:
                          Json::Value& output) override;
 
   Json::Value getzmqnotifications () override;
+
   void trackedgames (const std::string& cmd, const std::string& game) override;
+  bool trackedgameswithtoken (const std::string& cmd, const std::string& game,
+                              const std::string& token) override;
 
   Json::Value getnetworkinfo () override;
   Json::Value getblockchaininfo () override;
@@ -274,6 +280,23 @@ Controller::RpcServer::trackedgames (const std::string& cmd,
     run.zmq.TrackGame (game);
   else if (cmd == "remove")
     run.zmq.UntrackGame (game);
+}
+
+bool
+Controller::RpcServer::trackedgameswithtoken (const std::string& cmd,
+                                              const std::string& game,
+                                              const std::string& token)
+{
+  if (token.size () > MAX_TRACKING_TOKEN_LEN)
+    throw jsonrpc::JsonRpcException (jsonrpc::Errors::ERROR_RPC_INVALID_PARAMS,
+                                     "tracking token exceeds maximum length");
+
+  if (cmd == "add")
+    run.zmq.TrackGame (game, token);
+  else if (cmd == "remove")
+    run.zmq.UntrackGame (game, token);
+
+  return true;
 }
 
 Json::Value
