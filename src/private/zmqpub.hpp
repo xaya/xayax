@@ -1,4 +1,4 @@
-// Copyright (C) 2021 The Xaya developers
+// Copyright (C) 2021-2026 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +13,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace xayax
 {
@@ -39,13 +40,33 @@ private:
   std::unordered_map<std::string, uint32_t> nextSeq;
 
   /**
-   * The games that are currently tracked.  For each game, we store a current
-   * "depth" -- how many times it has been tracked; each untracking decrements
-   * the depth, and we stop actually tracking the game when the counter
-   * reaches zero.  This ensures that the logic will still work properly
-   * if multiple GSPs for the game game share a single Xaya X instance.
+   * Tracking state for one game.  A game is active if either the legacy
+   * tracking depth is positive or at least one token is registered.
    */
-  std::unordered_map<std::string, uint64_t> games;
+  struct TrackedGame
+  {
+
+    /** Legacy depth tracking, incremented and decremented by GSPs.  */
+    uint64_t depth = 0;
+
+    /** Tokens registered through the token-based tracking variant.  */
+    std::unordered_set<std::string> tokens;
+
+    bool
+    IsActive () const
+    {
+      return depth > 0 || !tokens.empty ();
+    }
+
+  };
+
+  /**
+   * The games that are currently tracked.  Each game can be tracked by the
+   * legacy depth counter and/or by an arbitrary set of tokens.  This ensures
+   * that the logic will still work properly if multiple GSPs for the game
+   * share a single Xaya X instance.
+   */
+  std::unordered_map<std::string, TrackedGame> games;
 
   /**
    * Sends a multipart message consisting of command, JSON data and the right
@@ -83,6 +104,16 @@ public:
    * Removes a game from the list of tracked games (decrementing its depth).
    */
   void UntrackGame (const std::string& g);
+
+  /**
+   * Adds a tracking token for a game.  This is idempotent.
+   */
+  void TrackGame (const std::string& g, const std::string& token);
+
+  /**
+   * Removes a tracking token for a game.  This is idempotent.
+   */
+  void UntrackGame (const std::string& g, const std::string& token);
 
   /**
    * Pushes notifications for all tracked games and the given block

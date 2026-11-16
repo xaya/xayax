@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2024 The Xaya developers
+// Copyright (C) 2021-2026 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -509,6 +509,68 @@ TEST_F (ZmqPubTests, TrackedGames)
       }
     )")
   ));
+}
+
+TEST_F (ZmqPubTests, TokenTracking)
+{
+  BlockData blk;
+  blk.hash = "blk";
+  blk.parent = "parent";
+  blk.height = 10;
+
+  const auto mv = Move ("p", "domob", "txid", R"(
+    {
+      "g": {"token-game": 42}
+    }
+  )");
+
+  /* No games are tracked so far.  */
+  pub.SendBlockAttach (blk, "");
+  pub.SendPendingMoves ({mv});
+
+  pub.TrackGame ("token-game", "token1");
+  pub.SendPendingMoves ({mv});
+  EXPECT_THAT (sub.AwaitMessages (Pending ("token-game"), 1), ElementsAre (
+    ParseJson (R"(
+      [
+        {
+          "txid": "txid",
+          "name": "domob",
+          "move": 42,
+          "burnt": 0
+        }
+      ]
+    )")
+  ));
+
+  pub.SendBlockAttach (blk, "");
+  EXPECT_EQ (sub.AwaitMessages (Attach ("token-game"), 1).size (), 1);
+
+  /* Adding the same token again is idempotent.  */
+  pub.TrackGame ("token-game", "token1");
+  pub.SendBlockAttach (blk, "");
+  EXPECT_EQ (sub.AwaitMessages (Attach ("token-game"), 1).size (), 1);
+
+  /* The game remains active as long as one token remains registered.  */
+  pub.TrackGame ("token-game", "token2");
+  pub.UntrackGame ("token-game", "token1");
+  pub.SendBlockAttach (blk, "");
+  EXPECT_EQ (sub.AwaitMessages (Attach ("token-game"), 1).size (), 1);
+
+  /* Removing an unknown token is idempotent.  */
+  pub.UntrackGame ("token-game", "unknown");
+  pub.SendBlockAttach (blk, "");
+  EXPECT_EQ (sub.AwaitMessages (Attach ("token-game"), 1).size (), 1);
+
+  /* Legacy depth tracking and tokens are independent.  */
+  pub.TrackGame ("token-game");
+  pub.UntrackGame ("token-game", "token2");
+  pub.SendBlockAttach (blk, "");
+  EXPECT_EQ (sub.AwaitMessages (Attach ("token-game"), 1).size (), 1);
+
+  /* Removing the last tracking source makes the game inactive.  */
+  pub.UntrackGame ("token-game");
+  pub.SendBlockAttach (blk, "");
 }
 
 TEST_F (ZmqPubTests, PendingMoves)

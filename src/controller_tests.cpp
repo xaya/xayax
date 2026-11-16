@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2024 The Xaya developers
+// Copyright (C) 2021-2026 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -460,6 +460,33 @@ TEST_F (ControllerRpcTests, TrackedGames)
   rpc.trackedgames ("add", GAME_ID);
   const auto b = base.SetTip (base.NewBlock ());
   ExpectZmq ({}, {b});
+}
+
+TEST_F (ControllerRpcTests, TrackedGamesToken)
+{
+  /* Remove the legacy tracking of the game from the test controller.  */
+  rpc.trackedgames ("remove", GAME_ID);
+
+  EXPECT_TRUE (rpc.trackedgameswithtoken ("add", GAME_ID, "client1"));
+  const auto a = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {a});
+
+  /* Re-adding the token is idempotent.  */
+  EXPECT_TRUE (rpc.trackedgameswithtoken ("add", GAME_ID, "client1"));
+  const auto b = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {b});
+
+  /* Removing an unknown token is idempotent.  */
+  EXPECT_TRUE (rpc.trackedgameswithtoken ("remove", GAME_ID, "unknown"));
+  const auto c = base.SetTip (base.NewBlock ());
+  ExpectZmq ({}, {c});
+
+  /* Removing the registered token deactivates the game.  */
+  EXPECT_TRUE (rpc.trackedgameswithtoken ("remove", GAME_ID, "client1"));
+  base.SetTip (base.NewBlock ());
+  /* Give the controller time to process the block, which must not trigger
+     another notification.  */
+  SleepSome ();
 }
 
 TEST_F (ControllerRpcTests, GetNetworkInfo)

@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2024 The Xaya developers
+// Copyright (C) 2021-2026 The Xaya developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -251,18 +251,8 @@ ZmqPub::TrackGame (const std::string& g)
 {
   std::lock_guard<std::mutex> lock(mut);
 
-  uint64_t newDepth;
-  auto mit = games.find (g);
-  if (mit == games.end ())
-    {
-      games.emplace (g, 1);
-      newDepth = 1;
-    }
-  else
-    {
-      newDepth = mit->second + 1;
-      mit->second = newDepth;
-    }
+  auto& game = games[g];
+  const uint64_t newDepth = ++game.depth;
 
   LOG (INFO) << "Tracking game '" << g << "', new depth: " << newDepth;
 }
@@ -272,22 +262,46 @@ ZmqPub::UntrackGame (const std::string& g)
 {
   std::lock_guard<std::mutex> lock(mut);
 
-  uint64_t newDepth;
+  uint64_t newDepth = 0;
   auto mit = games.find (g);
-  if (mit == games.end ())
-    newDepth = 0;
-  else
+  if (mit != games.end ())
     {
-      CHECK_GT (mit->second, 0);
-      newDepth = mit->second - 1;
+      if (mit->second.depth > 0)
+        newDepth = --mit->second.depth;
 
-      if (newDepth == 0)
+      if (!mit->second.IsActive ())
         games.erase (mit);
-      else
-        mit->second = newDepth;
     }
 
   LOG (INFO) << "Untracking game '" << g << "', new depth: " << newDepth;
+}
+
+void
+ZmqPub::TrackGame (const std::string& g, const std::string& token)
+{
+  std::lock_guard<std::mutex> lock(mut);
+
+  auto& game = games[g];
+  game.tokens.insert (token);
+
+  LOG (INFO) << "Tracking game '" << g << "' with token '" << token << "'";
+}
+
+void
+ZmqPub::UntrackGame (const std::string& g, const std::string& token)
+{
+  std::lock_guard<std::mutex> lock(mut);
+
+  auto mit = games.find (g);
+  if (mit != games.end ())
+    {
+      mit->second.tokens.erase (token);
+
+      if (!mit->second.IsActive ())
+        games.erase (mit);
+    }
+
+  LOG (INFO) << "Untracking game '" << g << "' with token '" << token << "'";
 }
 
 void
@@ -356,7 +370,7 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
   std::map<std::string, Json::Value> perGameAdmin;
   for (const auto& entry : games)
     {
-      CHECK_GT (entry.second, 0);
+      CHECK (entry.second.IsActive ());
       perGameMoves.emplace (entry.first, Json::Value (Json::arrayValue));
       perGameAdmin.emplace (entry.first, Json::Value (Json::arrayValue));
     }
@@ -373,7 +387,7 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
           if (mit == perGameMoves.end ())
             continue;
 
-          CHECK_EQ (games.count (entry.first), 1);
+          CHECK (games.at (entry.first).IsActive ());
           CHECK (mit->second.isArray ());
           mit->second.append (entry.second);
         }
@@ -386,7 +400,7 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
           if (mit == perGameAdmin.end ())
             continue;
 
-          CHECK_EQ (games.count (adminGame), 1);
+          CHECK (games.at (adminGame).IsActive ());
           CHECK (mit->second.isArray ());
           mit->second.append (adminCmd);
         }
@@ -395,7 +409,7 @@ ZmqPub::SendBlock (const std::string& cmdPrefix, const BlockData& blk,
   /* Send out notifications for all tracked games.  */
   for (const auto& entry : games)
     {
-      CHECK_GT (entry.second, 0);
+      CHECK (entry.second.IsActive ());
 
       const auto mitMv = perGameMoves.find (entry.first);
       CHECK (mitMv != perGameMoves.end ());
@@ -438,7 +452,7 @@ ZmqPub::SendPendingMoves (const std::vector<MoveData>& moves)
   std::map<std::string, Json::Value> movesPerGame;
   for (const auto& entry : games)
     {
-      CHECK_GT (entry.second, 0);
+      CHECK (entry.second.IsActive ());
       movesPerGame.emplace (entry.first, Json::Value (Json::arrayValue));
     }
 
@@ -458,7 +472,7 @@ ZmqPub::SendPendingMoves (const std::vector<MoveData>& moves)
           if (mit == movesPerGame.end ())
             continue;
 
-          CHECK_EQ (games.count (entry.first), 1);
+          CHECK (games.at (entry.first).IsActive ());
           mit->second.append (entry.second);
         }
     }
